@@ -1,25 +1,21 @@
-
+import { Peer } from 'peerjs';
 import { OnlineMessage } from '../types';
 
 export class PeerService {
-  private peer: any;
+  private peer: Peer;
   private conn: any;
   private onDataCallback: ((data: OnlineMessage) => void) | null = null;
   private onConnectCallback: (() => void) | null = null;
 
   constructor() {
-    // @ts-ignore
-    if (window.Peer) {
-      // @ts-ignore
-      this.peer = new window.Peer(undefined, {
-        debug: 2
-      });
+    this.peer = new Peer(undefined, {
+      debug: 2
+    });
 
-      this.peer.on('connection', (conn: any) => {
-        this.conn = conn;
-        this.setupConnection();
-      });
-    }
+    this.peer.on('connection', (conn: any) => {
+      this.conn = conn;
+      this.setupConnection();
+    });
   }
 
   public getMyId(): Promise<string> {
