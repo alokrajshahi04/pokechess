@@ -10,6 +10,7 @@ import PromotionModal from './components/PromotionModal';
 import TeamSelectionModal from './components/TeamSelectionModal';
 import OnlineModal from './components/OnlineModal';
 import Pokedex from './components/Pokedex';
+import './index.css';
 import TrainerTower from './components/TrainerTower'; 
 import { getAIMove } from './services/geminiService';
 import { GameDifficulty, PieceType, GameMode, AppView, BoardOrientation, BoardEffect, AnimationType, TeamTheme, GameVariant, Emote, XPState, Mission, TrainerStats, ShopItem, Achievement } from './types';
