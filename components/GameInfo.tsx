@@ -6,7 +6,7 @@ import { TEAM_PRESETS, LEAGUES } from '../constants';
 import PokemonPiece from './PokemonPiece';
 import ShopList from './ShopList';
 import ProfileView from './ProfileView';
-import { Send, Mic, Play, SkipBack, SkipForward, Rewind, LogOut, RotateCcw, Repeat, CheckCircle2, RotateCw } from 'lucide-react';
+import { Send, Mic, Play, SkipBack, SkipForward, Rewind, LogOut, RotateCcw, Repeat, CheckCircle2, RotateCw, BrainCircuit } from 'lucide-react';
 import { getAIChatResponse } from '../services/geminiService';
 import { toast } from 'react-hot-toast';
 
@@ -132,6 +132,12 @@ const GameInfo: React.FC<GameInfoProps> = ({
       }
   };
 
+  const toggleDifficulty = () => {
+      if (difficulty === GameDifficulty.EASY) setDifficulty(GameDifficulty.MEDIUM);
+      else if (difficulty === GameDifficulty.MEDIUM) setDifficulty(GameDifficulty.HARD);
+      else setDifficulty(GameDifficulty.EASY);
+  };
+
   const history = game.history({ verbose: true });
   const moveList = history.map((move, i) => {
       const pieceName = TEAM_PRESETS[move.color === 'w' ? whiteTheme : blackTheme][move.piece].name;
@@ -177,6 +183,11 @@ const GameInfo: React.FC<GameInfoProps> = ({
              </div>
 
              <div className="flex items-center gap-4">
+                 {gameMode === 'ai' && (
+                     <button onClick={toggleDifficulty} className="text-[9px] font-bold uppercase tracking-wider px-2 py-1 bg-slate-800 rounded border border-slate-600 hover:border-slate-400 text-slate-300">
+                         {difficulty}
+                     </button>
+                 )}
                  <div className="bg-slate-950/40 px-3 py-1.5 rounded-lg border border-white/5 flex items-center gap-2 shadow-inner">
                       <span className="text-xs">🪙</span>
                       <span className="text-xs text-yellow-400 font-mono font-bold">{coins}</span>
@@ -191,14 +202,20 @@ const GameInfo: React.FC<GameInfoProps> = ({
         </div>
 
         {/* OPPONENT CARD */}
-        <div className="px-4 py-3 bg-slate-800/20 flex items-center justify-between border-b border-white/5 shrink-0">
-            <div className="flex items-center gap-3">
+        <div className="px-4 py-3 bg-slate-800/20 flex items-center justify-between border-b border-white/5 shrink-0 relative overflow-hidden">
+            {isAiThinking && (
+                 <div className="absolute inset-0 bg-blue-500/5 animate-pulse z-0"></div>
+            )}
+            <div className="flex items-center gap-3 relative z-10">
                 <div className="w-10 h-10 rounded-full border-2 border-red-500 bg-slate-800 flex items-center justify-center overflow-hidden shadow-lg relative ring-2 ring-red-500/20">
                      <div className="absolute inset-0 bg-red-500/10"></div>
                      <PokemonPiece pokemonDef={TEAM_PRESETS[topTheme]['k']} type='k' color={topColor} hasShinyCharm={inventory.includes('shiny_charm') && topColor === 'b'} />
                 </div>
                 <div>
-                    <div className="text-xs font-bold text-slate-300 uppercase tracking-wide">{topLabel}</div>
+                    <div className="flex items-center gap-2">
+                        <div className="text-xs font-bold text-slate-300 uppercase tracking-wide">{topLabel}</div>
+                        {isAiThinking && <BrainCircuit size={12} className="text-blue-400 animate-pulse" />}
+                    </div>
                     <div className="flex gap-0.5 mt-1">
                         {(isWhiteOrientation ? capturedWhite : capturedBlack).map((p, i) => (
                              <div key={i} className="w-3 h-3 opacity-70 grayscale hover:grayscale-0 transition-all"><PokemonPiece pokemonDef={TEAM_PRESETS[isWhiteOrientation ? whiteTheme : blackTheme][p]} type={p} color={isWhiteOrientation ? 'w' : 'b'} /></div>
@@ -207,13 +224,13 @@ const GameInfo: React.FC<GameInfoProps> = ({
                 </div>
             </div>
             {gameMode !== 'ai' && (
-                 <div className="flex gap-2 text-xs font-bold text-slate-400 bg-slate-900/40 px-2 py-1 rounded border border-white/5">
+                 <div className="flex gap-2 text-xs font-bold text-slate-400 bg-slate-900/40 px-2 py-1 rounded border border-white/5 relative z-10">
                     <span className="text-white">W: {p2pScore.white}</span>
                     <span className="text-slate-600">|</span>
                     <span className="text-white">B: {p2pScore.black}</span>
                  </div>
             )}
-            <div className={`text-xl font-mono font-bold ${topTime < 30 ? 'text-red-500 animate-pulse text-glow' : 'text-slate-200'} bg-slate-950/50 px-3 py-1 rounded-lg border border-white/5 min-w-[70px] text-center`}>
+            <div className={`text-xl font-mono font-bold ${topTime < 30 ? 'text-red-500 animate-pulse text-glow' : 'text-slate-200'} bg-slate-950/50 px-3 py-1 rounded-lg border border-white/5 min-w-[70px] text-center relative z-10`}>
                 {formatTime(topTime)}
             </div>
         </div>

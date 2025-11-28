@@ -1,3 +1,4 @@
+
 import { Peer } from 'peerjs';
 import { OnlineMessage } from '../types';
 
@@ -8,9 +9,9 @@ export class PeerService {
   private onConnectCallback: (() => void) | null = null;
 
   constructor() {
-    this.peer = new Peer(undefined, {
+    this.peer = new Peer({
       debug: 2
-    });
+    } as any);
 
     this.peer.on('connection', (conn: any) => {
       this.conn = conn;

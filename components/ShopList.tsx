@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { ShopItem } from '../types';
 import { SHOP_ITEMS } from '../constants';
-import { ShoppingBag, Check, Lock, Sparkles } from 'lucide-react';
+import { ShoppingBag, Check } from 'lucide-react';
 
 interface ShopListProps {
   coins: number;

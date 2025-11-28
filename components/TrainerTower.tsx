@@ -18,7 +18,6 @@ const TrainerTower: React.FC<TrainerTowerProps> = ({ onExit, onScore }) => {
   const [score, setScore] = useState(0);
   const [timeLeft, setTimeLeft] = useState(60);
   const [gameOver, setGameOver] = useState(false);
-  const [activeTheme, setActiveTheme] = useState<any>('classic_hero'); // Default visualization
   
   useEffect(() => {
       playStartSound();
@@ -50,23 +49,6 @@ const TrainerTower: React.FC<TrainerTowerProps> = ({ onExit, onScore }) => {
       setPuzzleIndex(index);
   };
 
-  const handleSquareClick = (square: Square) => {
-      if (gameOver) return;
-      
-      const game = chessRef.current;
-      const moves = game.moves({ verbose: true });
-      const puzzle = PUZZLES[puzzleIndex];
-      const solutionMove = puzzle.solution[0]; // Simplified: 1st move only for now
-
-      // Very simplified move handling for puzzles (click to move best logic or source/dest)
-      // For this demo, we assume drag/drop or full click logic exists in parent, 
-      // but here we just need to detect if user made the right move.
-      // Reusing ChessBoard requires managing selection state.
-      
-      // ... Let's simplify: We need `selectedSquare` state here too.
-  };
-
-  // Re-implementing simplified selection logic specifically for puzzles
   const [selectedSquare, setSelectedSquare] = useState<Square | null>(null);
   const [validDestinations, setValidDestinations] = useState<string[]>([]);
 

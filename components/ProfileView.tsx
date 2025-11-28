@@ -3,7 +3,7 @@ import React from 'react';
 import { TrainerStats, XPState, Mission } from '../types';
 import TrainerCard from './TrainerCard';
 import MissionTracker from './MissionTracker';
-import { Zap, Trophy, Gamepad2 } from 'lucide-react';
+import { Zap } from 'lucide-react';
 
 interface ProfileViewProps {
   trainerStats: TrainerStats;

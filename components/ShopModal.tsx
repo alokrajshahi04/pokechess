@@ -2,7 +2,6 @@
 import React from 'react';
 import { SHOP_ITEMS } from '../constants';
 import { ShopItem } from '../types';
-import { toast } from 'react-hot-toast';
 
 interface ShopModalProps {
   coins: number;

@@ -1,5 +1,5 @@
 
-import { PieceType, PieceColor, AnimationType, TeamTheme, PokemonDef, BoardTheme, Mission, League, ShopItem, Achievement, Puzzle } from './types';
+import { PieceType, AnimationType, TeamTheme, PokemonDef, BoardTheme, Mission, League, ShopItem, Achievement, Puzzle } from './types';
 
 // Pokemon Definition Helper
 const p = (id: number, name: string, ...types: string[]): PokemonDef => ({ id, name, types });
@@ -139,7 +139,7 @@ export const VOICE_FILE_MAP: Record<string, string> = {
     'five': '5', 'six': '6', 'seven': '7', 'eight': '8'
 };
 
-// --- NEW FEATURES CONSTANTS ---
+// --- NEW TYPES ---
 
 export const LEAGUES: League[] = [
     { id: 'bronze', name: 'Bronze', minRating: 0, color: '#cd7f32' },
