@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Chess } from 'chess.js';
-import { PieceType, GameDifficulty, GameMode, BoardOrientation, TeamTheme, XPState, Mission, TrainerStats, ShopItem, League } from '../types';
+import { PieceType, GameDifficulty, GameMode, BoardOrientation, TeamTheme, XPState, Mission, TrainerStats, ShopItem } from '../types';
 import { TEAM_PRESETS, LEAGUES } from '../constants';
 import PokemonPiece from './PokemonPiece';
 import ShopList from './ShopList';

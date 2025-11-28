@@ -13,14 +13,14 @@ import Pokedex from './components/Pokedex';
 import './index.css';
 import TrainerTower from './components/TrainerTower'; 
 import { getAIMove } from './services/geminiService';
-import { GameDifficulty, PieceType, GameMode, AppView, BoardOrientation, BoardEffect, AnimationType, TeamTheme, GameVariant, Emote, XPState, Mission, TrainerStats, ShopItem, Achievement } from './types';
+import { GameDifficulty, PieceType, GameMode, AppView, BoardOrientation, BoardEffect, AnimationType, TeamTheme, GameVariant, Emote, XPState, Mission, TrainerStats, ShopItem } from './types';
 import { SPECIAL_ATTACKS, MOVE_ANIMATIONS, TEAM_PRESETS, KOTH_SQUARES, DAILY_MISSIONS, ACHIEVEMENTS } from './constants';
 import { parseVoiceCommand } from './utils/voiceControl';
 import { peerService } from './utils/peerService';
 import { Toaster, toast } from 'react-hot-toast';
 import confetti from 'canvas-confetti';
 import { 
-    playMoveSound, playCaptureSound, playCheckSound, playWinSound, playStartSound, 
+    playMoveSound, playCheckSound, playWinSound, playStartSound, 
     playThunderSound, playFireSound, playPsychicSound, playSlamSound, playTeleportSound, playGhostSound,
     playCritSound, playLevelUpSound, playEmoteSound
 } from './utils/sound';
@@ -198,13 +198,13 @@ const App: React.FC = () => {
       const isDraw = winner === 'draw' || game.isDraw();
 
       if (isDraw) {
-          toast("It's a Draw!", { icon: '🤝' });
+          toast(reason ? `Draw: ${reason}` : "It's a Draw!", { icon: '🤝' });
           setTrainerStats(prev => ({...prev, draws: prev.draws + 1, currentStreak: 0, gamesPlayed: prev.gamesPlayed + 1}));
       } else {
           playWinSound();
           confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
           const winText = actualWinner === 'w' ? "White Wins!" : "Black Wins!";
-          toast(winText, { icon: '🏆' });
+          toast(reason ? `${winText} (${reason})` : winText, { icon: '🏆' });
 
           if (gameMode !== 'ai') {
               setP2pScore(prev => ({
