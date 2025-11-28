@@ -18,7 +18,8 @@ interface ChessBoardProps {
   whiteTheme: TeamTheme;
   blackTheme: TeamTheme;
   gameVariant: GameVariant;
-  emotes: Emote[]; // Active emotes
+  emotes: Emote[]; 
+  isOnFire?: boolean; 
 }
 
 const ChessBoard: React.FC<ChessBoardProps> = ({ 
@@ -33,7 +34,8 @@ const ChessBoard: React.FC<ChessBoardProps> = ({
   whiteTheme,
   blackTheme,
   gameVariant,
-  emotes
+  emotes,
+  isOnFire = false
 }) => {
   const isCheck = game.inCheck();
   const turn = game.turn();
@@ -60,75 +62,83 @@ const ChessBoard: React.FC<ChessBoardProps> = ({
   const isBigAttack = boardEffect?.variant === '3x3';
   const isCrit = boardEffect?.type === 'crit';
   
-  // Resolve Theme Colors (Biome)
-  // Use White's theme to determine the board biome
   const themeColors = BOARD_THEMES[whiteTheme];
 
   return (
-    <div className={`relative w-full max-w-[600px] aspect-square bg-[#3d2f23] p-3 rounded-lg shadow-2xl border-4 border-[#2a2018] ${isBigAttack || isCrit ? 'animate-shake' : ''}`}>
-      <div className="w-full h-full grid grid-rows-8 grid-cols-8 border-2 border-[#5c4a3d] relative overflow-hidden">
-        {displayRows.map((r) => (
-          displayCols.map((f) => {
-            const piece = board[r][f];
-            const squareLabel = `${files[f]}${ranks[r]}` as Square;
-            const isValid = possibleMoves.includes(squareLabel);
-            const isSelected = selectedSquare === squareLabel;
-            const isLast = lastMove ? (lastMove.from === squareLabel || lastMove.to === squareLabel) : false;
-            const isKingInCheck = kingInCheckSquare === squareLabel;
+    <div className={`relative w-full aspect-square bg-[#3d2f23] p-1 sm:p-2 rounded-xl shadow-elevation-3 border border-white/5 ${isBigAttack || isCrit ? 'animate-shake' : ''} ${isOnFire ? 'shadow-neon-blue border-blue-500/50 ring-4 ring-blue-500/20' : ''} transition-all duration-500 mx-auto max-w-2xl group`}>
+      
+      {/* "On Fire" Flames Effect */}
+      {isOnFire && (
+          <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden rounded-lg">
+               <div className="absolute bottom-0 w-full h-48 bg-gradient-to-t from-blue-600 to-transparent opacity-40 animate-pulse blur-2xl"></div>
+               <div className="absolute -inset-10 bg-[url('https://www.transparenttextures.com/patterns/fire.png')] opacity-30 animate-pulse mix-blend-screen"></div>
+          </div>
+      )}
 
-            let pokemonDef;
-            if (piece) {
-                const theme = piece.color === 'w' ? whiteTheme : blackTheme;
-                pokemonDef = TEAM_PRESETS[theme][piece.type];
-            }
+      {/* Board Bezel / Depth */}
+      <div className="w-full h-full bg-[#2a2018] p-1 rounded-lg shadow-inner">
+          <div className="w-full h-full grid grid-rows-8 grid-cols-8 border-2 border-[#5c4a3d] relative overflow-hidden z-10 rounded shadow-2xl">
+            {displayRows.map((r) => (
+              displayCols.map((f) => {
+                const piece = board[r][f];
+                const squareLabel = `${files[f]}${ranks[r]}` as Square;
+                const isValid = possibleMoves.includes(squareLabel);
+                const isSelected = selectedSquare === squareLabel;
+                const isLast = lastMove ? (lastMove.from === squareLabel || lastMove.to === squareLabel) : false;
+                const isKingInCheck = kingInCheckSquare === squareLabel;
 
-            const isKoth = gameVariant === 'koth' && KOTH_SQUARES.includes(squareLabel);
+                let pokemonDef;
+                if (piece) {
+                    const theme = piece.color === 'w' ? whiteTheme : blackTheme;
+                    pokemonDef = TEAM_PRESETS[theme][piece.type];
+                }
+
+                const isKoth = gameVariant === 'koth' && KOTH_SQUARES.includes(squareLabel);
+                const squareEmotes = emotes.filter(e => e.square === squareLabel);
+
+                return (
+                  <div key={squareLabel} className="relative w-full h-full">
+                      <BoardSquare
+                        rank={r} 
+                        file={f}
+                        piece={piece}
+                        pokemonDef={pokemonDef}
+                        isValidMove={isValid}
+                        isSelected={isSelected}
+                        isLastMove={isLast}
+                        isCheck={isKingInCheck}
+                        isKothSquare={isKoth}
+                        themeColors={themeColors}
+                        onClick={() => onSquareClick(squareLabel)}
+                      />
+                      {/* Floating Emotes Layer */}
+                      {squareEmotes.map(e => (
+                          <div key={e.id} className="absolute inset-0 flex items-center justify-center pointer-events-none z-50 animate-float-up text-2xl sm:text-4xl drop-shadow-md">
+                              {e.emoji}
+                          </div>
+                      ))}
+                  </div>
+                );
+              })
+            ))}
             
-            // Check for emotes on this square
-            const squareEmotes = emotes.filter(e => e.square === squareLabel);
-
-            return (
-              <div key={squareLabel} className="relative w-full h-full">
-                  <BoardSquare
-                    rank={r} 
-                    file={f}
-                    piece={piece}
-                    pokemonDef={pokemonDef}
-                    isValidMove={isValid}
-                    isSelected={isSelected}
-                    isLastMove={isLast}
-                    isCheck={isKingInCheck}
-                    isKothSquare={isKoth}
-                    themeColors={themeColors}
-                    onClick={() => onSquareClick(squareLabel)}
-                  />
-                  {/* Floating Emotes Layer */}
-                  {squareEmotes.map(e => (
-                      <div key={e.id} className="absolute inset-0 flex items-center justify-center pointer-events-none z-50 animate-float-up text-3xl drop-shadow-md">
-                          {e.emoji}
-                      </div>
-                  ))}
-              </div>
-            );
-          })
-        ))}
-        
-        {/* Animation Overlay (Combat or Move) */}
-        {boardEffect && boardEffect.type !== 'crit' && (
-            <CombatEffects 
-                type={boardEffect.type as any} 
-                targetSquare={boardEffect.targetSquare} 
-                orientation={orientation}
-                variant={boardEffect.variant}
-            />
-        )}
-        
-        {/* Critical Hit Overlay */}
-        {isCrit && (
-             <div className="absolute inset-0 bg-red-500/30 z-50 pointer-events-none animate-pulse flex items-center justify-center">
-                 <h1 className="text-6xl font-pixel text-yellow-400 drop-shadow-[4px_4px_0_#000] rotate-[-15deg] animate-bounce">CRITICAL!</h1>
-             </div>
-        )}
+            {/* Animation Overlay */}
+            {boardEffect && boardEffect.type !== 'crit' && (
+                <CombatEffects 
+                    type={boardEffect.type as any} 
+                    targetSquare={boardEffect.targetSquare} 
+                    orientation={orientation}
+                    variant={boardEffect.variant}
+                />
+            )}
+            
+            {/* Critical Hit Overlay */}
+            {isCrit && (
+                 <div className="absolute inset-0 bg-red-500/20 z-50 pointer-events-none animate-pulse flex items-center justify-center backdrop-blur-[2px]">
+                     <h1 className="text-4xl sm:text-6xl font-pixel text-yellow-400 drop-shadow-[4px_4px_0_#000] rotate-[-15deg] animate-bounce filter brightness-125">CRITICAL!</h1>
+                 </div>
+            )}
+          </div>
       </div>
       
       <style>{`

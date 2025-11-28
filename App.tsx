@@ -8,13 +8,14 @@ import Onboarding from './components/Onboarding';
 import HeroPage from './components/HeroPage';
 import PromotionModal from './components/PromotionModal';
 import TeamSelectionModal from './components/TeamSelectionModal';
-import OnlineModal from './components/OnlineModal'; // New
+import OnlineModal from './components/OnlineModal';
 import Pokedex from './components/Pokedex';
+import TrainerTower from './components/TrainerTower'; 
 import { getAIMove } from './services/geminiService';
-import { GameDifficulty, PieceType, GameMode, AppView, BoardOrientation, BoardEffect, AnimationType, TeamTheme, GameVariant, Emote, XPState, Mission, TrainerStats } from './types';
-import { SPECIAL_ATTACKS, MOVE_ANIMATIONS, TEAM_PRESETS, KOTH_SQUARES, DAILY_MISSIONS } from './constants';
+import { GameDifficulty, PieceType, GameMode, AppView, BoardOrientation, BoardEffect, AnimationType, TeamTheme, GameVariant, Emote, XPState, Mission, TrainerStats, ShopItem, Achievement } from './types';
+import { SPECIAL_ATTACKS, MOVE_ANIMATIONS, TEAM_PRESETS, KOTH_SQUARES, DAILY_MISSIONS, ACHIEVEMENTS } from './constants';
 import { parseVoiceCommand } from './utils/voiceControl';
-import { peerService } from './utils/peerService'; // New
+import { peerService } from './utils/peerService';
 import { Toaster, toast } from 'react-hot-toast';
 import confetti from 'canvas-confetti';
 import { 
@@ -22,8 +23,16 @@ import {
     playThunderSound, playFireSound, playPsychicSound, playSlamSound, playTeleportSound, playGhostSound,
     playCritSound, playLevelUpSound, playEmoteSound
 } from './utils/sound';
+import { BookOpen } from 'lucide-react';
 
 const INITIAL_TIME = 600;
+
+// Simple Page Transition Wrapper
+const PageTransition = ({ children, className = "" }: { children?: React.ReactNode; className?: string }) => (
+    <div className={`animate-fade-in w-full h-full ${className}`}>
+        {children}
+    </div>
+);
 
 const App: React.FC = () => {
   const chessRef = useRef(new Chess());
@@ -56,13 +65,17 @@ const App: React.FC = () => {
   const [blackTime, setBlackTime] = useState(INITIAL_TIME);
   const timerIntervalRef = useRef<number | null>(null);
 
-  // Stats
+  // Stats & Economy
   const [xpState, setXpState] = useState<XPState>({ current: 0, level: 1, max: 100 });
-  const [p2pScore, setP2pScore] = useState({ white: 0, black: 0 }); // Local/Online Scoreboard
+  const [coins, setCoins] = useState(100); 
+  const [inventory, setInventory] = useState<string[]>(['theme_classic_hero', 'theme_classic_villain']); 
+  const [unlockedAchievements, setUnlockedAchievements] = useState<string[]>([]);
+
+  const [p2pScore, setP2pScore] = useState({ white: 0, black: 0 }); 
   const [emotes, setEmotes] = useState<Emote[]>([]);
   const [missions, setMissions] = useState<Mission[]>(DAILY_MISSIONS);
   const [trainerStats, setTrainerStats] = useState<TrainerStats>({
-      gamesPlayed: 0, wins: 0, losses: 0, draws: 0, highestStreak: 0, currentStreak: 0
+      gamesPlayed: 0, wins: 0, losses: 0, draws: 0, highestStreak: 0, currentStreak: 0, rating: 1000 
   });
   const [replayIndex, setReplayIndex] = useState(-1);
 
@@ -76,17 +89,16 @@ const App: React.FC = () => {
                 const move = game.move(moveData);
                 if (move) {
                     setLastMove({ from: move.from, to: move.to });
-                    updateGameState(move, true); // true = skip sending back
+                    updateGameState(move, true); 
                     toast.success("Opponent moved!");
                 }
             } catch (e) { console.error("Invalid remote move", e); }
         } else if (msg.type === 'config') {
-            // Joiner receives config
             const { variant, wTheme, bTheme } = msg.payload;
             setGameVariant(variant);
             setWhiteTheme(wTheme);
             setBlackTheme(bTheme);
-            startGame(false); // Do not play start sound twice
+            startGame(false); 
         } else if (msg.type === 'emote') {
             handleEmote(msg.payload.emoji, msg.payload.square, true);
         } else if (msg.type === 'restart') {
@@ -111,7 +123,6 @@ const App: React.FC = () => {
       
       let kingSquare = originSquare;
       if (!kingSquare) {
-          // Find MY king if I triggered it
            for(let r=0; r<8; r++) {
               for(let c=0; c<8; c++) {
                   const p = board[r][c];
@@ -133,9 +144,7 @@ const App: React.FC = () => {
   };
 
   const addXp = (amount: number) => {
-      // Only for AI Mode
       if (gameMode !== 'ai') return;
-      
       setXpState(prev => {
           let newCurrent = prev.current + amount;
           let newLevel = prev.level;
@@ -150,6 +159,20 @@ const App: React.FC = () => {
           return { current: newCurrent, level: newLevel, max: newMax };
       });
   };
+
+  const checkAchievements = () => {
+      ACHIEVEMENTS.forEach(ach => {
+          if (!unlockedAchievements.includes(ach.id) && ach.condition(trainerStats)) {
+              setUnlockedAchievements(prev => [...prev, ach.id]);
+              toast(`Achievement Unlocked: ${ach.title}`, { icon: ach.icon });
+              setCoins(prev => prev + 100); 
+          }
+      });
+  };
+
+  useEffect(() => {
+      checkAchievements();
+  }, [trainerStats]);
 
   const triggerAnimation = (type: AnimationType | 'crit', targetSquare: string, variant: '1x1' | '3x3') => {
       setBoardEffect({ type, targetSquare, variant });
@@ -175,31 +198,44 @@ const App: React.FC = () => {
 
       if (isDraw) {
           toast("It's a Draw!", { icon: '🤝' });
+          setTrainerStats(prev => ({...prev, draws: prev.draws + 1, currentStreak: 0, gamesPlayed: prev.gamesPlayed + 1}));
       } else {
           playWinSound();
           confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
           const winText = actualWinner === 'w' ? "White Wins!" : "Black Wins!";
           toast(winText, { icon: '🏆' });
 
-          // Update Scoreboard for P2P/Online
           if (gameMode !== 'ai') {
               setP2pScore(prev => ({
                   white: actualWinner === 'w' ? prev.white + 1 : prev.white,
                   black: actualWinner === 'b' ? prev.black + 1 : prev.black
               }));
           } else {
-              // XP for AI Mode
-              if (actualWinner === (boardOrientation === 'white' ? 'w' : 'b')) {
+              const playerWon = actualWinner === (boardOrientation === 'white' ? 'w' : 'b');
+              if (playerWon) {
                    addXp(100);
-                   setTrainerStats(prev => ({...prev, wins: prev.wins + 1, currentStreak: prev.currentStreak + 1, gamesPlayed: prev.gamesPlayed + 1}));
+                   setCoins(prev => prev + 50); 
+                   setTrainerStats(prev => ({
+                       ...prev, 
+                       wins: prev.wins + 1, 
+                       currentStreak: prev.currentStreak + 1, 
+                       highestStreak: Math.max(prev.highestStreak, prev.currentStreak + 1),
+                       gamesPlayed: prev.gamesPlayed + 1,
+                       rating: prev.rating + 25 
+                   }));
               } else {
-                   setTrainerStats(prev => ({...prev, losses: prev.losses + 1, currentStreak: 0, gamesPlayed: prev.gamesPlayed + 1}));
+                   setTrainerStats(prev => ({
+                       ...prev, 
+                       losses: prev.losses + 1, 
+                       currentStreak: 0, 
+                       gamesPlayed: prev.gamesPlayed + 1,
+                       rating: Math.max(0, prev.rating - 15) 
+                   }));
               }
           }
       }
   }, [boardOrientation, gameMode]);
 
-  // Timer logic
   useEffect(() => {
     if (view !== 'game' || chessRef.current.isGameOver()) return;
     timerIntervalRef.current = window.setInterval(() => {
@@ -221,7 +257,6 @@ const App: React.FC = () => {
     const currentPieces: Record<string, number> = { wp:0, wn:0, wb:0, wr:0, wq:0, wk:0, bp:0, bn:0, bb:0, br:0, bq:0, bk:0 };
     game.board().flat().forEach(p => { if (p) currentPieces[`${p.color}${p.type}`]++; });
     const startingCounts: Record<string, number> = { wp:8, wn:2, wb:2, wr:2, wq:1, wk:1, bp:8, bn:2, bb:2, br:2, bq:1, bk:1 };
-    
     const newCapturedWhite: PieceType[] = [];
     const newCapturedBlack: PieceType[] = [];
     (['p','n','b','r','q'] as PieceType[]).forEach(t => {
@@ -232,12 +267,10 @@ const App: React.FC = () => {
     setCapturedBlack(newCapturedBlack);
 
     if (move) {
-        // Send to peer if online and local move
         if (gameMode === 'online' && !remoteMove) {
             peerService.send({ type: 'move', payload: { from: move.from, to: move.to, promotion: move.promotion } });
         }
 
-        // Missions (Only AI)
         if (gameMode === 'ai') {
              setMissions(prev => prev.map(m => {
                 if (m.completed) return m;
@@ -247,7 +280,7 @@ const App: React.FC = () => {
                 if (m.type === 'check' && game.inCheck()) p=1;
                 if(p>0) {
                      const nc = m.current + p;
-                     if(nc>=m.target) { toast(`Mission: ${m.description}`, {icon: '🎖️'}); addXp(m.rewardXp); return {...m, current:nc, completed:true}; }
+                     if(nc>=m.target) { toast(`Mission: ${m.description}`, {icon: '🎖️'}); addXp(m.rewardXp); setCoins(c=>c+25); return {...m, current:nc, completed:true}; }
                      return {...m, current:nc};
                 }
                 return m;
@@ -316,17 +349,16 @@ const App: React.FC = () => {
   const handleOnlineJoin = (isHost: boolean) => {
       setShowOnlineModal(false);
       if (isHost) {
-          setShowSetupModal(true); // Host chooses settings
+          setShowSetupModal(true); 
       } else {
-          setBoardOrientation('black'); // Joiner is black
-          setView('game'); // Joiner waits for config
+          setBoardOrientation('black'); 
+          setView('game'); 
       }
   };
 
   const handleSetupConfirm = (variant: GameVariant, wTheme: TeamTheme, bTheme: TeamTheme) => {
       setGameVariant(variant); setWhiteTheme(wTheme); setBlackTheme(bTheme); setShowSetupModal(false); 
       if (gameMode === 'online') {
-          // Send config to joiner
           peerService.send({ type: 'config', payload: { variant, wTheme, bTheme } });
       }
       startGame();
@@ -341,7 +373,7 @@ const App: React.FC = () => {
         chessRef.current = new Chess();
         setWhiteTime(INITIAL_TIME); setBlackTime(INITIAL_TIME);
         setLastMove(null); setSelectedSquare(null); setValidDestinations([]);
-        setCommentary(""); setEmotes([]); setXpState(prev => ({...prev, current: prev.current}));
+        setCommentary(""); setEmotes([]); 
         setReplayIndex(-1);
         updateGameState();
         setView('game');
@@ -355,7 +387,10 @@ const App: React.FC = () => {
       startGame();
   };
   
-  const exitToLanding = () => { setView('landing'); if(timerIntervalRef.current) clearInterval(timerIntervalRef.current); };
+  const exitToLanding = () => { 
+      setView('landing'); 
+      if(timerIntervalRef.current) clearInterval(timerIntervalRef.current); 
+  };
 
   const makeAIMove = useCallback(async () => {
     const game = chessRef.current;
@@ -379,15 +414,13 @@ const App: React.FC = () => {
     }
   }, [turn, makeAIMove, gameMode]);
 
-  const handleSquareClick = (square: Square) => {
+  const handleSquareClick = useCallback((square: Square) => {
     if (replayIndex !== -1) return;
     const game = chessRef.current;
     if (isAiThinking || game.isGameOver() || promotionMove) return;
     
-    // AI Mode Logic
     if (gameMode === 'ai' && game.turn() === 'b') return;
     
-    // Online Mode Logic
     if (gameMode === 'online') {
         const myColor = boardOrientation === 'white' ? 'w' : 'b';
         if (game.turn() !== myColor) return;
@@ -397,7 +430,6 @@ const App: React.FC = () => {
 
     if (selectedSquare) {
         const piece = game.get(selectedSquare);
-        // Promotion check
         if (piece?.type === 'p' && ((piece.color === 'w' && square[1] === '8') || (piece.color === 'b' && square[1] === '1'))) {
             if (validDestinations.includes(square)) { setPromotionMove({ from: selectedSquare, to: square }); return; }
         }
@@ -417,7 +449,7 @@ const App: React.FC = () => {
         setSelectedSquare(square);
         setValidDestinations(game.moves({ square, verbose: true }).map(m => m.to));
     } else { setSelectedSquare(null); setValidDestinations([]); }
-  };
+  }, [boardOrientation, gameMode, isAiThinking, promotionMove, replayIndex, selectedSquare, updateGameState, validDestinations]);
 
   const handlePromotionSelect = (type: PieceType) => {
       if (!promotionMove) return;
@@ -428,7 +460,7 @@ const App: React.FC = () => {
   };
 
   const undoMove = () => {
-    if (isAiThinking || replayIndex !== -1 || gameMode === 'online') return; // Disable Undo in online
+    if (isAiThinking || replayIndex !== -1 || gameMode === 'online') return; 
     const game = chessRef.current;
     if(game.history().length === 0) return;
     game.undo();
@@ -437,52 +469,127 @@ const App: React.FC = () => {
     playMoveSound(); updateGameState();
   };
 
-  if (view === 'hero') return <HeroPage onEnter={() => { playStartSound(); setView('onboarding'); }} />;
-  if (view === 'onboarding') return <div className="min-h-screen bg-gray-900"><Onboarding onComplete={() => setView('landing')} /></div>;
-  if (view === 'landing') return (
-        <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center font-sans overflow-hidden relative">
-            <Toaster position="top-center" />
-            <button onClick={() => setShowPokedex(true)} className="absolute top-4 right-4 bg-red-600 text-white px-4 py-2 rounded-lg font-bold shadow-lg border-2 border-red-800 hover:bg-red-500 z-50">📖 Pokedex</button>
-            {showPokedex && <Pokedex onClose={() => setShowPokedex(false)} />}
-            {showOnlineModal && <OnlineModal onJoin={handleOnlineJoin} onCancel={() => setShowOnlineModal(false)} />}
-            {showSetupModal && <TeamSelectionModal gameMode={gameMode} onConfirm={handleSetupConfirm} onCancel={() => setShowSetupModal(false)} />}
-            <LandingPage onStartGame={onStartBtnClick} />
-        </div>
-  );
-  if (view === 'loading') return <div className="min-h-screen bg-gray-900 flex items-center justify-center"><p className="text-white font-pixel animate-pulse">LOADING...</p></div>;
+  const handleBuyItem = (item: ShopItem) => {
+      if (coins >= item.cost) {
+          setCoins(c => c - item.cost);
+          setInventory(i => [...i, item.id]);
+          toast.success(`Purchased ${item.name}!`);
+      } else {
+          toast.error("Not enough coins!");
+      }
+  };
 
   return (
-    <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center p-4 lg:p-8 font-sans overflow-hidden relative">
-      <Toaster position="top-center" />
+    <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 lg:p-6 font-sans relative overflow-x-hidden overflow-y-hidden text-slate-50">
+      <Toaster position="top-center" toastOptions={{
+          style: {
+              background: '#1e293b',
+              color: '#fff',
+              border: '1px solid rgba(255,255,255,0.1)',
+              boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+          }
+      }} />
       {promotionMove && <PromotionModal color={turn} onSelect={handlePromotionSelect} onClose={() => setPromotionMove(null)} />}
       
-      {/* Background Decor */}
-      <div className="absolute inset-0 pointer-events-none opacity-20 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-blue-900 via-gray-900 to-black animate-pulse"></div>
+      {/* Premium Noise Overlay */}
+      <div className="pointer-events-none fixed inset-0 z-0 bg-noise opacity-[0.03] mix-blend-overlay"></div>
       
-      <div className="z-10 flex flex-col lg:flex-row gap-6 items-start justify-center w-full max-w-6xl animate-fadeIn">
-        <div className="flex-grow w-full flex justify-center lg:justify-end">
-            <ChessBoard 
-                game={chessRef.current} board={displayedBoard} selectedSquare={selectedSquare}
-                possibleMoves={validDestinations} lastMove={lastMove} onSquareClick={handleSquareClick}
-                orientation={boardOrientation} boardEffect={boardEffect}
-                whiteTheme={whiteTheme} blackTheme={blackTheme} gameVariant={gameVariant}
-                emotes={emotes}
-            />
-        </div>
-        <div className="w-full lg:w-96 flex-shrink-0">
-            <GameInfo 
-                game={chessRef.current} capturedWhite={capturedWhite} capturedBlack={capturedBlack}
-                commentary={commentary} difficulty={difficulty} gameMode={gameMode} orientation={boardOrientation}
-                setDifficulty={setDifficulty} resetGame={() => resetGame()} undoMove={undoMove} onFlipBoard={() => setBoardOrientation(p => p === 'white' ? 'black' : 'white')}
-                onExit={exitToLanding} isAiThinking={isAiThinking} whiteTime={whiteTime} blackTime={blackTime}
-                whiteTheme={whiteTheme} blackTheme={blackTheme} xpState={xpState} 
-                missions={missions} trainerStats={trainerStats} isGameOver={chessRef.current.isGameOver()}
-                onEmote={(e) => handleEmote(e, undefined)} onVoiceCommand={handleVoiceCommand}
-                replayIndex={replayIndex} setReplayIndex={setReplayIndex}
-                p2pScore={p2pScore}
-            />
-        </div>
+      {/* Background Decor */}
+      <div className="fixed inset-0 pointer-events-none z-0">
+          <div className="absolute inset-0 bg-gradient-to-br from-indigo-950 via-slate-950 to-black opacity-90"></div>
+          <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-500/10 via-slate-950/0 to-transparent"></div>
+          <div className="absolute bottom-0 right-0 w-full h-full bg-[radial-gradient(ellipse_at_bottom,_var(--tw-gradient-stops))] from-blue-500/5 via-slate-950/0 to-transparent"></div>
       </div>
+      
+      {view === 'hero' && (
+          <PageTransition className="z-50 flex items-center justify-center relative">
+             <HeroPage onEnter={() => { playStartSound(); setView('onboarding'); }} />
+          </PageTransition>
+      )}
+
+      {view === 'onboarding' && (
+          <PageTransition className="z-50 min-h-screen flex items-center justify-center relative">
+             <Onboarding onComplete={() => setView('landing')} />
+          </PageTransition>
+      )}
+
+      {view === 'tower' && (
+          <PageTransition className="z-20 min-h-screen w-full relative">
+             <TrainerTower onExit={() => setView('landing')} onScore={(s) => { setCoins(c => c + s); setView('landing'); }} />
+          </PageTransition>
+      )}
+      
+      {view === 'landing' && (
+          <PageTransition className="z-20 w-full h-full flex flex-col relative">
+             <button 
+                onClick={() => setShowPokedex(true)} 
+                className="fixed top-3 right-3 sm:top-6 sm:right-6 bg-red-600/90 backdrop-blur text-white p-2 sm:px-4 sm:py-2 rounded-full font-bold shadow-glass hover:shadow-neon-red hover:bg-red-500 hover:scale-105 active:scale-95 transition-all z-50 flex items-center gap-2 border border-red-400/30"
+                aria-label="Open Pokedex"
+             >
+                 <BookOpen size={20} /> <span className="hidden sm:inline">Pokedex</span>
+             </button>
+             {showPokedex && <Pokedex onClose={() => setShowPokedex(false)} />}
+             {showOnlineModal && <OnlineModal onJoin={handleOnlineJoin} onCancel={() => setShowOnlineModal(false)} />}
+             {showSetupModal && <TeamSelectionModal gameMode={gameMode} onConfirm={handleSetupConfirm} onCancel={() => setShowSetupModal(false)} inventory={inventory} />}
+             <LandingPage 
+                 onStartGame={onStartBtnClick} 
+                 xpState={xpState}
+                 trainerStats={trainerStats}
+                 missions={missions}
+                 coins={coins}
+                 inventory={inventory}
+                 onBuyItem={handleBuyItem}
+                 onOpenTower={() => setView('tower')}
+             />
+          </PageTransition>
+      )}
+
+      {view === 'loading' && (
+          <div className="min-h-screen flex items-center justify-center z-50 absolute inset-0 bg-slate-950/80 backdrop-blur-md">
+             <div className="flex flex-col items-center gap-4">
+                 <div className="relative w-16 h-16">
+                     <div className="absolute inset-0 border-4 border-slate-700/50 rounded-full"></div>
+                     <div className="absolute inset-0 border-4 border-yellow-500 rounded-full border-t-transparent animate-spin shadow-neon-yellow"></div>
+                 </div>
+                 <p className="text-yellow-400 font-pixel animate-pulse text-sm tracking-widest text-glow">INITIALIZING...</p>
+             </div>
+          </div>
+      )}
+
+      {view === 'game' && (
+        <PageTransition className="z-10 flex flex-col lg:flex-row gap-6 items-center lg:items-start justify-center w-full max-w-7xl flex-1 mx-auto my-auto h-full relative">
+            {/* Board Container */}
+            <div className="w-full lg:flex-grow flex justify-center lg:justify-end order-1">
+                <ChessBoard 
+                    game={chessRef.current} board={displayedBoard} selectedSquare={selectedSquare}
+                    possibleMoves={validDestinations} lastMove={lastMove} onSquareClick={handleSquareClick}
+                    orientation={boardOrientation} boardEffect={boardEffect}
+                    whiteTheme={whiteTheme} blackTheme={blackTheme} gameVariant={gameVariant}
+                    emotes={emotes}
+                    isOnFire={trainerStats.currentStreak >= 3}
+                />
+            </div>
+
+            {/* Info Container */}
+            <div className="w-full lg:w-[420px] flex-shrink-0 order-2">
+                <GameInfo 
+                    game={chessRef.current} capturedWhite={capturedWhite} capturedBlack={capturedBlack}
+                    commentary={commentary} difficulty={difficulty} gameMode={gameMode} orientation={boardOrientation}
+                    setDifficulty={setDifficulty} resetGame={() => resetGame()} undoMove={undoMove} onFlipBoard={() => setBoardOrientation(p => p === 'white' ? 'black' : 'white')}
+                    onExit={exitToLanding} isAiThinking={isAiThinking} whiteTime={whiteTime} blackTime={blackTime}
+                    whiteTheme={whiteTheme} blackTheme={blackTheme} xpState={xpState} 
+                    missions={missions} trainerStats={trainerStats} isGameOver={chessRef.current.isGameOver()}
+                    onEmote={(e) => handleEmote(e, undefined)} onVoiceCommand={handleVoiceCommand}
+                    replayIndex={replayIndex} setReplayIndex={setReplayIndex}
+                    p2pScore={p2pScore}
+                    coins={coins}
+                    inventory={inventory}
+                    onBuyItem={handleBuyItem}
+                    onOpenTower={() => setView('tower')}
+                />
+            </div>
+        </PageTransition>
+      )}
     </div>
   );
 };

@@ -40,7 +40,7 @@ export enum GameDifficulty {
 }
 
 export type GameMode = 'ai' | 'p2p' | 'online';
-export type AppView = 'hero' | 'onboarding' | 'landing' | 'loading' | 'game' | 'pokedex';
+export type AppView = 'hero' | 'onboarding' | 'landing' | 'loading' | 'game' | 'pokedex' | 'tower';
 export type BoardOrientation = 'white' | 'black';
 
 export type GameVariant = 'standard' | 'koth'; // King of the Hill
@@ -98,9 +98,52 @@ export interface TrainerStats {
     draws: number;
     highestStreak: number;
     currentStreak: number;
+    rating: number; // Elo-like rating
 }
 
 export interface OnlineMessage {
     type: 'move' | 'chat' | 'emote' | 'config' | 'restart';
     payload: any;
+}
+
+// --- NEW TYPES ---
+
+export interface League {
+    id: string;
+    name: string;
+    minRating: number;
+    color: string;
+}
+
+export type ShopCategory = 'theme' | 'item' | 'merch';
+
+export interface ShopItem {
+    id: string;
+    name: string;
+    type: ShopCategory;
+    cost: number;
+    value: string; // Theme ID or Item ID
+    description: string;
+}
+
+export interface Achievement {
+    id: string;
+    title: string;
+    description: string;
+    icon: string;
+    condition: (stats: TrainerStats) => boolean;
+}
+
+export interface Puzzle {
+    id: string;
+    fen: string;
+    solution: string[]; // Sequence of SAN moves
+    description: string;
+}
+
+export interface PuzzleState {
+    currentPuzzleIndex: number;
+    score: number;
+    timeLeft: number;
+    isActive: boolean;
 }

@@ -2,58 +2,30 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>PokeChess</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- PeerJS is still loaded via CDN for simplicity, but in a real prod app could be bundled -->
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Roboto:wght@400;700&display=swap" rel="stylesheet">
-    <style>
-      body {
-        font-family: 'Roboto', sans-serif;
-      }
-      .font-pixel {
-        font-family: 'Press Start 2P', cursive;
-      }
-      /* Custom scrollbar for move history */
-      ::-webkit-scrollbar {
-        width: 8px;
-      }
-      ::-webkit-scrollbar-track {
-        background: #1f2937; 
-      }
-      ::-webkit-scrollbar-thumb {
-        background: #4b5563; 
-        border-radius: 4px;
-      }
-      ::-webkit-scrollbar-thumb:hover {
-        background: #6b7280; 
-      }
-      
-      @keyframes float {
-        0% { transform: translateY(0px); }
-        50% { transform: translateY(-5px); }
-        100% { transform: translateY(0px); }
-      }
-      .animate-float {
-        animation: float 3s ease-in-out infinite;
-      }
-    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Roboto:wght@300;400;500;700;900&display=swap" rel="stylesheet">
   <script type="importmap">
 {
   "imports": {
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
     "react/": "https://aistudiocdn.com/react@^19.2.0/",
     "react": "https://aistudiocdn.com/react@^19.2.0",
     "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
-    "react-hot-toast": "https://aistudiocdn.com/react-hot-toast@^2.6.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.555.0",
+    "vite": "https://aistudiocdn.com/vite@^7.2.4",
+    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.1",
     "chess.js": "https://aistudiocdn.com/chess.js@^1.4.0",
-    "canvas-confetti": "https://aistudiocdn.com/canvas-confetti@^1.9.0",
-    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.555.0"
+    "canvas-confetti": "https://aistudiocdn.com/canvas-confetti@^1.9.4",
+    "react-hot-toast": "https://aistudiocdn.com/react-hot-toast@^2.6.0"
   }
 }
 </script>
 </head>
-  <body class="bg-gray-900 text-white">
+  <body class="bg-slate-950 text-slate-50 overflow-x-hidden antialiased selection:bg-yellow-500/30 selection:text-yellow-200">
     <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
   </body>
 </html>

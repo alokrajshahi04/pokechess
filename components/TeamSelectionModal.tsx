@@ -3,17 +3,25 @@ import React, { useState } from 'react';
 import { GameVariant, TeamTheme, GameMode, PieceType } from '../types';
 import { TEAM_PRESETS } from '../constants';
 import PokemonPiece from './PokemonPiece';
+import { toast } from 'react-hot-toast';
 
 interface TeamSelectionModalProps {
   gameMode: GameMode;
   onConfirm: (variant: GameVariant, whiteTheme: TeamTheme, blackTheme: TeamTheme) => void;
   onCancel: () => void;
+  inventory?: string[]; // New prop
 }
 
-const TeamSelectionModal: React.FC<TeamSelectionModalProps> = ({ gameMode, onConfirm, onCancel }) => {
+const TeamSelectionModal: React.FC<TeamSelectionModalProps> = ({ gameMode, onConfirm, onCancel, inventory = [] }) => {
   const [variant, setVariant] = useState<GameVariant>('standard');
   const [whiteTheme, setWhiteTheme] = useState<TeamTheme>('classic_hero');
   const [blackTheme, setBlackTheme] = useState<TeamTheme>('classic_villain');
+
+  // Base themes + check if others are in inventory
+  const isUnlocked = (themeId: string) => {
+      if (themeId === 'classic_hero' || themeId === 'classic_villain') return true;
+      return inventory.includes(`theme_${themeId}`);
+  };
 
   const themes: { id: TeamTheme; label: string; color: string }[] = [
     { id: 'classic_hero', label: 'Classic Hero', color: 'bg-blue-600' },
@@ -52,6 +60,14 @@ const TeamSelectionModal: React.FC<TeamSelectionModalProps> = ({ gameMode, onCon
              ))}
           </div>
       );
+  };
+
+  const handleSelectTheme = (setter: Function, id: TeamTheme) => {
+      if (isUnlocked(id)) {
+          setter(id);
+      } else {
+          toast.error("Locked! Purchase in PokeMart.");
+      }
   };
 
   return (
@@ -104,19 +120,23 @@ const TeamSelectionModal: React.FC<TeamSelectionModalProps> = ({ gameMode, onCon
                      </div>
 
                      <div className="space-y-2 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
-                        {themes.map(t => (
-                            <button
-                                key={t.id}
-                                onClick={() => setWhiteTheme(t.id)}
-                                className={`w-full flex items-center justify-between p-3 rounded border transition-all ${whiteTheme === t.id ? 'border-blue-400 bg-gray-700' : 'border-transparent bg-gray-800/50 hover:bg-gray-700'}`}
-                            >
-                                <div className="flex items-center gap-3">
-                                    <div className={`w-3 h-3 rounded-full ${t.color}`}></div>
-                                    <span className="text-sm font-bold text-gray-200">{t.label}</span>
-                                </div>
-                                {whiteTheme === t.id && <span className="text-xs text-blue-400 font-bold">SELECTED</span>}
-                            </button>
-                        ))}
+                        {themes.map(t => {
+                            const locked = !isUnlocked(t.id);
+                            return (
+                                <button
+                                    key={t.id}
+                                    onClick={() => handleSelectTheme(setWhiteTheme, t.id)}
+                                    className={`w-full flex items-center justify-between p-3 rounded border transition-all ${whiteTheme === t.id ? 'border-blue-400 bg-gray-700' : 'border-transparent bg-gray-800/50 hover:bg-gray-700'} ${locked ? 'opacity-50 grayscale' : ''}`}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div className={`w-3 h-3 rounded-full ${t.color}`}></div>
+                                        <span className="text-sm font-bold text-gray-200">{t.label}</span>
+                                    </div>
+                                    {locked && <span className="text-xs text-red-500">🔒</span>}
+                                    {whiteTheme === t.id && <span className="text-xs text-blue-400 font-bold">SELECTED</span>}
+                                </button>
+                            );
+                        })}
                      </div>
                 </div>
 
@@ -133,19 +153,25 @@ const TeamSelectionModal: React.FC<TeamSelectionModalProps> = ({ gameMode, onCon
                      </div>
 
                      <div className="space-y-2 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
-                        {themes.map(t => (
-                            <button
-                                key={t.id}
-                                onClick={() => setBlackTheme(t.id)}
-                                className={`w-full flex items-center justify-between p-3 rounded border transition-all ${blackTheme === t.id ? 'border-red-400 bg-gray-700' : 'border-transparent bg-gray-800/50 hover:bg-gray-700'}`}
-                            >
-                                <div className="flex items-center gap-3">
-                                    <div className={`w-3 h-3 rounded-full ${t.color}`}></div>
-                                    <span className="text-sm font-bold text-gray-200">{t.label}</span>
-                                </div>
-                                {blackTheme === t.id && <span className="text-xs text-red-400 font-bold">SELECTED</span>}
-                            </button>
-                        ))}
+                        {themes.map(t => {
+                            // AI can play any theme, but let's restrict player from picking locked themes for AI just to be consistent, or allow it for preview?
+                            // Let's allow unlocking AI themes too for consistency.
+                            const locked = !isUnlocked(t.id);
+                             return (
+                                <button
+                                    key={t.id}
+                                    onClick={() => handleSelectTheme(setBlackTheme, t.id)}
+                                    className={`w-full flex items-center justify-between p-3 rounded border transition-all ${blackTheme === t.id ? 'border-red-400 bg-gray-700' : 'border-transparent bg-gray-800/50 hover:bg-gray-700'} ${locked ? 'opacity-50 grayscale' : ''}`}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div className={`w-3 h-3 rounded-full ${t.color}`}></div>
+                                        <span className="text-sm font-bold text-gray-200">{t.label}</span>
+                                    </div>
+                                    {locked && <span className="text-xs text-red-500">🔒</span>}
+                                    {blackTheme === t.id && <span className="text-xs text-red-400 font-bold">SELECTED</span>}
+                                </button>
+                            );
+                        })}
                      </div>
                 </div>
             </div>

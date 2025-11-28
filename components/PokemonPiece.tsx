@@ -1,4 +1,3 @@
-
 import React, { useMemo } from 'react';
 import { PieceType, PieceColor, PokemonDef } from '../types';
 import { SPRITE_BASE_URL } from '../constants';
@@ -9,16 +8,21 @@ interface PokemonPieceProps {
   color: PieceColor;
   className?: string;
   isCheck?: boolean; 
+  hasShinyCharm?: boolean; 
 }
 
-const PokemonPiece: React.FC<PokemonPieceProps> = ({ pokemonDef, type, color, className = '', isCheck = false }) => {
+// React.memo optimization to prevent re-renders when board state doesn't change this square
+const PokemonPiece: React.FC<PokemonPieceProps> = React.memo(({ pokemonDef, type, color, className = '', isCheck = false, hasShinyCharm = false }) => {
   const id = pokemonDef?.id || 0;
   const primaryType = pokemonDef?.types[0] || 'normal';
   const spriteUrl = `${SPRITE_BASE_URL}${id}.png`;
 
-  // Gen Z Feature: 5% Chance for Shiny Pokemon
-  // useMemo with empty dependency ensures this is calculated once per component instance
-  const isShiny = useMemo(() => Math.random() < 0.05, []);
+  // Gen Z Feature: Shiny Logic
+  // Base chance 5% (0.05). With Shiny Charm -> 25% (0.25)
+  const isShiny = useMemo(() => {
+      const chance = hasShinyCharm ? 0.25 : 0.05;
+      return Math.random() < chance;
+  }, [hasShinyCharm]);
 
   // Determine Aura Style based on Pokemon Type
   let auraClass = '';
@@ -44,7 +48,7 @@ const PokemonPiece: React.FC<PokemonPieceProps> = ({ pokemonDef, type, color, cl
       : (color === 'b' ? 'brightness-90 grayscale-[10%]' : 'brightness-110');
 
   return (
-    <div className={`relative flex items-center justify-center w-full h-full ${className}`}>
+    <div className={`relative flex items-center justify-center w-full h-full animate-scale-in ${className}`}>
         
         {/* Pulsating Red Circle for Check */}
         {isCheck && (
@@ -56,6 +60,7 @@ const PokemonPiece: React.FC<PokemonPieceProps> = ({ pokemonDef, type, color, cl
             <div className="absolute inset-0 z-20 pointer-events-none">
                 <div className="absolute top-0 right-0 text-[10px] animate-pulse">✨</div>
                 <div className="absolute bottom-1 left-0 text-[8px] animate-bounce">✨</div>
+                {hasShinyCharm && <div className="absolute top-1/2 left-1/2 text-[12px] animate-ping opacity-50">🌟</div>}
             </div>
         )}
 
@@ -67,19 +72,20 @@ const PokemonPiece: React.FC<PokemonPieceProps> = ({ pokemonDef, type, color, cl
         {id > 0 && (
             <img 
                 src={spriteUrl} 
-                alt={`${color}${type}`} 
+                alt={`${color === 'w' ? 'White' : 'Black'} ${type} - ${pokemonDef?.name}`}
+                loading="lazy"
                 style={{ filter: imageFilter }}
                 className={`w-full h-full object-contain z-10 transition-all duration-200 animate-float ${auraClass}`}
             />
         )}
         
         {/* Type Icon Badge */}
-        <span className={`absolute -bottom-1 -right-1 text-[8px] font-bold px-1.5 py-0.5 rounded shadow-sm scale-90 z-20
+        <span className={`absolute -bottom-1 -right-1 text-[8px] font-bold px-1.5 py-0.5 rounded shadow-sm scale-90 z-20 pointer-events-none
             ${color === 'w' ? 'bg-white text-blue-900 border border-blue-900' : 'bg-gray-800 text-red-500 border border-red-500'}`}>
             {primaryType.substring(0,3).toUpperCase()}
         </span>
     </div>
   );
-};
+});
 
 export default PokemonPiece;

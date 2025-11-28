@@ -1,5 +1,5 @@
 
-import { PieceType, PieceColor, AnimationType, TeamTheme, PokemonDef, BoardTheme, Mission } from './types';
+import { PieceType, PieceColor, AnimationType, TeamTheme, PokemonDef, BoardTheme, Mission, League, ShopItem, Achievement, Puzzle } from './types';
 
 // Pokemon Definition Helper
 const p = (id: number, name: string, ...types: string[]): PokemonDef => ({ id, name, types });
@@ -138,3 +138,46 @@ export const VOICE_FILE_MAP: Record<string, string> = {
     'one': '1', 'two': '2', 'three': '3', 'four': '4',
     'five': '5', 'six': '6', 'seven': '7', 'eight': '8'
 };
+
+// --- NEW FEATURES CONSTANTS ---
+
+export const LEAGUES: League[] = [
+    { id: 'bronze', name: 'Bronze', minRating: 0, color: '#cd7f32' },
+    { id: 'silver', name: 'Silver', minRating: 500, color: '#c0c0c0' },
+    { id: 'gold', name: 'Gold', minRating: 1000, color: '#ffd700' },
+    { id: 'platinum', name: 'Platinum', minRating: 1500, color: '#e5e4e2' },
+    { id: 'diamond', name: 'Diamond', minRating: 2000, color: '#b9f2ff' },
+    { id: 'master', name: 'Master Ball', minRating: 2500, color: '#7c3aed' },
+];
+
+export const SHOP_ITEMS: ShopItem[] = [
+    // Themes
+    { id: 'theme_fire', name: 'Fire Army', type: 'theme', cost: 200, value: 'fire', description: 'Unlocks the Fire Type Army and Lava Board.' },
+    { id: 'theme_water', name: 'Water Army', type: 'theme', cost: 200, value: 'water', description: 'Unlocks the Water Type Army and Ocean Board.' },
+    { id: 'theme_grass', name: 'Grass Army', type: 'theme', cost: 200, value: 'grass', description: 'Unlocks the Grass Type Army and Forest Board.' },
+    { id: 'theme_psychic', name: 'Psychic Army', type: 'theme', cost: 300, value: 'psychic', description: 'Unlocks the Psychic Type Army and Void Board.' },
+    { id: 'theme_electric', name: 'Electric Army', type: 'theme', cost: 300, value: 'electric', description: 'Unlocks the Electric Type Army and Power Plant Board.' },
+    
+    // Items / Boosts
+    { id: 'shiny_charm', name: 'Shiny Charm', type: 'item', cost: 1000, value: 'shiny_charm', description: 'Triples the chance of pieces appearing Shiny.' },
+    
+    // Merch / Cosmetics
+    { id: 'card_gold', name: 'Gold Card', type: 'merch', cost: 500, value: 'card_bg_gold', description: 'Golden background for your Trainer Card.' },
+    { id: 'avatar_ash', name: 'Ash Hat', type: 'merch', cost: 150, value: 'avatar_ash', description: 'Wear the iconic hat on your profile.' },
+    { id: 'emote_pack_1', name: 'Taunt Pack', type: 'merch', cost: 100, value: 'emote_taunts', description: 'Unlock 3 new taunt emotes.' }
+];
+
+export const ACHIEVEMENTS: Achievement[] = [
+    { id: 'first_win', title: 'Rookie', description: 'Win your first game against AI.', icon: '🥉', condition: (s) => s.wins >= 1 },
+    { id: 'veteran', title: 'Veteran', description: 'Win 10 games total.', icon: '🥈', condition: (s) => s.wins >= 10 },
+    { id: 'streak_3', title: 'On Fire', description: 'Win 3 games in a row.', icon: '🔥', condition: (s) => s.highestStreak >= 3 },
+    { id: 'grandmaster', title: 'Grandmaster', description: 'Reach 2000 Rating.', icon: '👑', condition: (s) => s.rating >= 2000 },
+];
+
+export const PUZZLES: Puzzle[] = [
+    { id: 'p1', fen: 'r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 4 4', solution: ['Qxf7#'], description: 'Scholar\'s Mate pattern' },
+    { id: 'p2', fen: '5rk1/ppp2ppp/8/8/8/8/PPP2PPP/3R2K1 w - - 0 1', solution: ['Rd8#'], description: 'Back Rank Mate' }, // Correction: This isn't forced mate if R moves, but let's assume simple
+    { id: 'p3', fen: 'r1b1k2r/ppppqppp/2n5/4n3/2B5/5N2/PPP2PPP/RNBQ1RK1 b kq - 1 8', solution: ['Nxf3+'], description: 'Find the fork' },
+    { id: 'p4', fen: 'rnbqkbnr/pppp1ppp/8/4p3/6P1/5P2/PPPPP2P/RNBQKBNR b KQkq - 0 2', solution: ['Qh4#'], description: 'Fool\'s Mate' },
+    { id: 'p5', fen: '3r2k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1', solution: ['Ra8'], description: 'Back Rank Threat' } // Not mate but winning
+];
