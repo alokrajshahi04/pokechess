@@ -59,25 +59,23 @@ const LandingPage: React.FC<LandingPageProps> = ({
   );
 
   return (
-    <div className="relative z-20 w-full h-full flex flex-col lg:grid lg:grid-cols-[1fr_420px] gap-8 lg:gap-16 items-center justify-center max-w-7xl mx-auto p-6 pt-20 lg:pt-8">
+    <div className="relative z-20 w-full h-screen flex flex-col lg:grid lg:grid-cols-[1fr_420px] gap-4 lg:gap-8 items-center justify-center max-w-7xl mx-auto p-4 pt-8 lg:pt-4">
       
       {/* LEFT COLUMN: HERO & MENU */}
-      <div className="flex flex-col justify-center w-full space-y-10 lg:space-y-12">
-        
-        {/* Title Block */}
+        <div className="flex flex-col justify-center w-full space-y-6 lg:space-y-8">        {/* Title Block */}
         <div className="text-center lg:text-left space-y-4">
-            <h1 className="text-5xl md:text-8xl font-pixel text-transparent bg-clip-text bg-gradient-to-br from-white to-slate-400 drop-shadow-sm tracking-tighter">
+            <h1 className="text-4xl md:text-6xl font-pixel text-transparent bg-clip-text bg-gradient-to-br from-white to-slate-400 drop-shadow-sm tracking-tighter">
                 <span className="lg:hidden">P<span className="text-blue-500">.CHESS</span></span>
                 <span className="hidden lg:inline">POKE<span className="text-blue-500 text-glow">CHESS</span></span>
             </h1>
             <p className="text-slate-400 text-lg font-light tracking-wide leading-relaxed max-w-lg mx-auto lg:mx-0">
-                Master the board. Catch the King. <br/> 
+                Master the board. Catch the Kassng. <br/> 
                 <span className="text-blue-400 font-bold border-b border-blue-400/30">Strategy</span> meets <span className="text-red-500 font-bold border-b border-red-500/30">Adventure</span>.
             </p>
         </div>
 
         {/* Menu Grid */}
-        <div className="flex flex-col gap-4 w-full max-w-lg mx-auto lg:mx-0">
+        <div className="flex flex-col gap-3 w-full max-w-lg mx-auto lg:mx-0">
             <MenuCard 
                 title="Vs Computer" 
                 subtitle="Challenge the Gemini AI Rival" 
@@ -103,14 +101,14 @@ const LandingPage: React.FC<LandingPageProps> = ({
       </div>
 
       {/* RIGHT COLUMN: TRAINER DASHBOARD */}
-      <div className="w-full h-[650px] lg:h-[750px] flex flex-col relative group">
+      <div className="w-full h-[500px] lg:h-[600px] flex flex-col relative group">
           <div className="absolute inset-0 bg-blue-500/5 blur-3xl rounded-full opacity-50 -z-10 group-hover:opacity-75 transition-opacity duration-1000"></div>
           
           {/* Device Container */}
           <div className="relative w-full h-full glass-panel rounded-3xl shadow-2xl flex flex-col overflow-hidden ring-1 ring-white/10 backdrop-blur-xl">
                
                {/* Header / Status Bar */}
-               <div className="bg-slate-900/50 p-5 border-b border-white/5 flex justify-between items-center shrink-0">
+               <div className="bg-slate-900/50 p-4 border-b border-white/5 flex justify-between items-center shrink-0">
                     <div className="flex items-center gap-4">
                          <div className="w-12 h-12 rounded-2xl border border-white/10 flex items-center justify-center bg-gradient-to-br from-slate-800 to-slate-900 shadow-inner relative overflow-hidden group/league">
                              <div className="absolute inset-0 bg-white/5 opacity-0 group-hover/league:opacity-100 transition-opacity"></div>
@@ -135,7 +133,7 @@ const LandingPage: React.FC<LandingPageProps> = ({
                </div>
 
                {/* Tab Navigation */}
-               <div className="flex p-3 gap-3 bg-slate-900/30 border-b border-white/5 shrink-0">
+               <div className="flex p-2 gap-3 bg-slate-900/30 border-b border-white/5 shrink-0">
                     <button 
                         onClick={() => setActiveTab('profile')} 
                         className={`flex-1 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-300 outline-none

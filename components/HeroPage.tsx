@@ -8,7 +8,7 @@ interface HeroPageProps {
 
 const HeroPage: React.FC<HeroPageProps> = ({ onEnter }) => {
   return (
-    <div className="relative z-50 min-h-screen w-full flex flex-col items-center justify-center overflow-hidden bg-slate-950 cursor-pointer" onClick={onEnter}>
+    <div className="relative z-50 h-screen w-full flex flex-col items-center justify-center overflow-hidden bg-slate-950 cursor-pointer" onClick={onEnter}>
       
       {/* Premium Background Effects */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-blue-900/20 via-slate-950 to-black z-0"></div>
@@ -33,11 +33,11 @@ const HeroPage: React.FC<HeroPageProps> = ({ onEnter }) => {
       </div>
 
       {/* Main Content Container */}
-      <div className="relative z-10 w-full max-w-7xl px-4 flex flex-col items-center gap-8 md:gap-12 animate-fade-in my-auto">
+      <div className="relative z-10 w-full max-w-7xl px-4 flex flex-col items-center gap-4 md:gap-6 animate-fade-in">
         
         {/* Title Section */}
         <div className="text-center relative group">
-            <h1 className="text-6xl sm:text-7xl md:text-9xl font-pixel text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 to-yellow-600 drop-shadow-neon-yellow tracking-widest relative z-10 transform group-hover:scale-105 transition-transform duration-700 ease-out whitespace-nowrap">
+            <h1 className="text-4xl sm:text-5xl md:text-7xl font-pixel text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 to-yellow-600 drop-shadow-neon-yellow tracking-widest relative z-10 transform group-hover:scale-105 transition-transform duration-700 ease-out whitespace-nowrap">
                 <span className="md:hidden">P<span className="text-blue-500 drop-shadow-neon-blue">-CHESS</span></span>
                 <span className="hidden md:inline">POKE<span className="text-transparent bg-clip-text bg-gradient-to-b from-blue-400 to-blue-700 drop-shadow-neon-blue">CHESS</span></span>
             </h1>
@@ -45,11 +45,11 @@ const HeroPage: React.FC<HeroPageProps> = ({ onEnter }) => {
         </div>
 
         {/* Content Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-12 md:gap-20 items-center w-full max-w-5xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 items-center w-full max-w-5xl mx-auto">
             
             {/* LEFT: The Battle Art */}
-            <div className="flex flex-col items-center justify-center gap-8 order-2 md:order-1">
-                <div className="flex items-center justify-center gap-8 md:gap-16 relative">
+            <div className="flex flex-col items-center justify-center gap-4 order-2 md:order-1">
+                <div className="flex items-center justify-center gap-4 md:gap-8 relative">
                     {/* Connecting Energy Beam */}
                     <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-1 bg-gradient-to-r from-yellow-500 via-white to-purple-500 opacity-50 blur-sm"></div>
 
@@ -59,7 +59,7 @@ const HeroPage: React.FC<HeroPageProps> = ({ onEnter }) => {
                         <img 
                             src={`${SPRITE_BASE_URL}25.png`} 
                             alt="Pikachu" 
-                            className="w-24 h-24 md:w-48 md:h-48 object-contain pixelated transform scale-x-[-1] animate-float-slow drop-shadow-lg relative z-10"
+                            className="w-16 h-16 md:w-32 md:h-32 object-contain pixelated transform scale-x-[-1] animate-float-slow drop-shadow-lg relative z-10"
                         />
                     </div>
 
@@ -71,7 +71,7 @@ const HeroPage: React.FC<HeroPageProps> = ({ onEnter }) => {
                         <img 
                             src={`${SPRITE_BASE_URL}150.png`} 
                             alt="Mewtwo" 
-                            className="w-24 h-24 md:w-48 md:h-48 object-contain pixelated animate-float-slow drop-shadow-lg relative z-10"
+                            className="w-16 h-16 md:w-32 md:h-32 object-contain pixelated animate-float-slow drop-shadow-lg relative z-10"
                             style={{ animationDelay: '1s' }}
                         />
                     </div>
@@ -83,7 +83,7 @@ const HeroPage: React.FC<HeroPageProps> = ({ onEnter }) => {
             </div>
 
             {/* RIGHT: Game Details */}
-            <div className="flex flex-col items-center order-1 md:order-2 w-full space-y-8">
+            <div className="flex flex-col items-center order-1 md:order-2 w-full space-y-4">
                 <div className="relative w-full max-w-md aspect-video bg-slate-900 rounded-xl border border-slate-700 shadow-2xl overflow-hidden transform md:rotate-2 hover:rotate-0 transition-all duration-700 group ring-1 ring-white/10">
                     <img 
                         src="https://images.unsplash.com/photo-1611195974226-a6a9be9dd763?w=800&auto=format&fit=crop&q=60" 
@@ -118,7 +118,7 @@ const HeroPage: React.FC<HeroPageProps> = ({ onEnter }) => {
         </div>
 
         {/* Call to Action */}
-        <div className="mt-8 flex flex-col items-center gap-6 pb-8">
+        <div className="mt-4 flex flex-col items-center gap-4 pb-4">
             <button 
                 onClick={(e) => { e.stopPropagation(); onEnter(); }}
                 className="group relative px-12 py-4 bg-transparent overflow-hidden rounded-full transition-all"

@@ -3,7 +3,7 @@ import React from 'react';
 import { TrainerStats, XPState, Mission } from '../types';
 import TrainerCard from './TrainerCard';
 import MissionTracker from './MissionTracker';
-import { Zap } from 'lucide-react';
+import { Zap, ChevronDown } from 'lucide-react';
 
 interface ProfileViewProps {
   trainerStats: TrainerStats;
@@ -15,7 +15,7 @@ interface ProfileViewProps {
 
 const ProfileView: React.FC<ProfileViewProps> = ({ trainerStats, xpState, missions, onOpenTower, inventory }) => {
   return (
-    <div className="p-4 space-y-6 h-full overflow-y-auto scrollbar-hide">
+    <div className="p-3 space-y-4 h-full overflow-y-auto scrollbar-hide relative">
         
         <TrainerCard 
             stats={trainerStats} 
@@ -25,13 +25,13 @@ const ProfileView: React.FC<ProfileViewProps> = ({ trainerStats, xpState, missio
         />
         
         {/* Quick Actions */}
-        <div className="grid grid-cols-2 gap-3">
-             <div className="bg-slate-800/50 p-3 rounded-xl border border-slate-700 flex flex-col items-center justify-center gap-1 group hover:border-slate-600 transition-colors">
+        <div className="grid grid-cols-2 gap-2">
+             <div className="bg-slate-800/50 p-2 rounded-xl border border-slate-700 flex flex-col items-center justify-center gap-1 group hover:border-slate-600 transition-colors">
                 <span className="text-2xl mb-1 group-hover:scale-110 transition-transform">🔥</span>
                 <span className="text-[9px] text-slate-400 uppercase font-bold tracking-wider">Top Streak</span>
                 <span className="font-mono font-bold text-yellow-400 text-lg leading-none">{trainerStats.highestStreak}</span>
              </div>
-             <div className="bg-slate-800/50 p-3 rounded-xl border border-slate-700 flex flex-col items-center justify-center gap-1 group hover:border-slate-600 transition-colors">
+             <div className="bg-slate-800/50 p-2 rounded-xl border border-slate-700 flex flex-col items-center justify-center gap-1 group hover:border-slate-600 transition-colors">
                 <span className="text-2xl mb-1 group-hover:scale-110 transition-transform">⚔️</span>
                 <span className="text-[9px] text-slate-400 uppercase font-bold tracking-wider">Matches</span>
                 <span className="font-mono font-bold text-white text-lg leading-none">{trainerStats.gamesPlayed}</span>
@@ -40,7 +40,7 @@ const ProfileView: React.FC<ProfileViewProps> = ({ trainerStats, xpState, missio
 
         <button 
             onClick={onOpenTower} 
-            className="w-full bg-gradient-to-r from-purple-900 to-purple-800 hover:from-purple-800 hover:to-purple-700 p-4 rounded-xl flex items-center justify-between border border-purple-500/30 shadow-lg group transition-all transform active:scale-[0.98] relative overflow-hidden"
+            className="w-full bg-gradient-to-r from-purple-900 to-purple-800 hover:from-purple-800 hover:to-purple-700 p-3 rounded-xl flex items-center justify-between border border-purple-500/30 shadow-lg group transition-all transform active:scale-[0.98] relative overflow-hidden"
         >
             <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
             <div className="flex items-center gap-3 z-10">
@@ -58,6 +58,11 @@ const ProfileView: React.FC<ProfileViewProps> = ({ trainerStats, xpState, missio
         </button>
 
         <MissionTracker missions={missions} />
+
+        {/* Scroll Indicator */}
+        <div className="absolute bottom-3 right-3 w-8 h-8 bg-white/10 backdrop-blur-sm rounded-full flex items-center justify-center border border-white/20 animate-bounce">
+            <ChevronDown className="w-4 h-4 text-white" />
+        </div>
     </div>
   );
 };
