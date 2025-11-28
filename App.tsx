@@ -1,0 +1,490 @@
+
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Chess, Square, Move } from 'chess.js';
+import ChessBoard from './components/ChessBoard';
+import GameInfo from './components/GameInfo';
+import LandingPage from './components/LandingPage';
+import Onboarding from './components/Onboarding';
+import HeroPage from './components/HeroPage';
+import PromotionModal from './components/PromotionModal';
+import TeamSelectionModal from './components/TeamSelectionModal';
+import OnlineModal from './components/OnlineModal'; // New
+import Pokedex from './components/Pokedex';
+import { getAIMove } from './services/geminiService';
+import { GameDifficulty, PieceType, GameMode, AppView, BoardOrientation, BoardEffect, AnimationType, TeamTheme, GameVariant, Emote, XPState, Mission, TrainerStats } from './types';
+import { SPECIAL_ATTACKS, MOVE_ANIMATIONS, TEAM_PRESETS, KOTH_SQUARES, DAILY_MISSIONS } from './constants';
+import { parseVoiceCommand } from './utils/voiceControl';
+import { peerService } from './utils/peerService'; // New
+import { Toaster, toast } from 'react-hot-toast';
+import confetti from 'canvas-confetti';
+import { 
+    playMoveSound, playCaptureSound, playCheckSound, playWinSound, playStartSound, 
+    playThunderSound, playFireSound, playPsychicSound, playSlamSound, playTeleportSound, playGhostSound,
+    playCritSound, playLevelUpSound, playEmoteSound
+} from './utils/sound';
+
+const INITIAL_TIME = 600;
+
+const App: React.FC = () => {
+  const chessRef = useRef(new Chess());
+  
+  const [view, setView] = useState<AppView>('hero');
+  const [gameMode, setGameMode] = useState<GameMode>('ai');
+  const [showSetupModal, setShowSetupModal] = useState(false);
+  const [showOnlineModal, setShowOnlineModal] = useState(false);
+  const [showPokedex, setShowPokedex] = useState(false);
+  const [boardOrientation, setBoardOrientation] = useState<BoardOrientation>('white');
+  const [gameVariant, setGameVariant] = useState<GameVariant>('standard');
+  const [whiteTheme, setWhiteTheme] = useState<TeamTheme>('classic_hero');
+  const [blackTheme, setBlackTheme] = useState<TeamTheme>('classic_villain');
+
+  const [board, setBoard] = useState(chessRef.current.board());
+  const [turn, setTurn] = useState(chessRef.current.turn());
+  const [lastMove, setLastMove] = useState<{ from: string; to: string } | null>(null);
+  const [selectedSquare, setSelectedSquare] = useState<Square | null>(null);
+  const [validDestinations, setValidDestinations] = useState<string[]>([]);
+  const [boardEffect, setBoardEffect] = useState<BoardEffect | null>(null);
+  const [promotionMove, setPromotionMove] = useState<{ from: string; to: string } | null>(null);
+  
+  const [commentary, setCommentary] = useState<string>("");
+  const [difficulty, setDifficulty] = useState<GameDifficulty>(GameDifficulty.MEDIUM);
+  const [isAiThinking, setIsAiThinking] = useState(false);
+  const [capturedWhite, setCapturedWhite] = useState<PieceType[]>([]);
+  const [capturedBlack, setCapturedBlack] = useState<PieceType[]>([]);
+  
+  const [whiteTime, setWhiteTime] = useState(INITIAL_TIME);
+  const [blackTime, setBlackTime] = useState(INITIAL_TIME);
+  const timerIntervalRef = useRef<number | null>(null);
+
+  // Stats
+  const [xpState, setXpState] = useState<XPState>({ current: 0, level: 1, max: 100 });
+  const [p2pScore, setP2pScore] = useState({ white: 0, black: 0 }); // Local/Online Scoreboard
+  const [emotes, setEmotes] = useState<Emote[]>([]);
+  const [missions, setMissions] = useState<Mission[]>(DAILY_MISSIONS);
+  const [trainerStats, setTrainerStats] = useState<TrainerStats>({
+      gamesPlayed: 0, wins: 0, losses: 0, draws: 0, highestStreak: 0, currentStreak: 0
+  });
+  const [replayIndex, setReplayIndex] = useState(-1);
+
+  // --- ONLINE LOGIC ---
+  useEffect(() => {
+    peerService.onData((msg) => {
+        if (msg.type === 'move') {
+            const moveData = msg.payload;
+            const game = chessRef.current;
+            try {
+                const move = game.move(moveData);
+                if (move) {
+                    setLastMove({ from: move.from, to: move.to });
+                    updateGameState(move, true); // true = skip sending back
+                    toast.success("Opponent moved!");
+                }
+            } catch (e) { console.error("Invalid remote move", e); }
+        } else if (msg.type === 'config') {
+            // Joiner receives config
+            const { variant, wTheme, bTheme } = msg.payload;
+            setGameVariant(variant);
+            setWhiteTheme(wTheme);
+            setBlackTheme(bTheme);
+            startGame(false); // Do not play start sound twice
+        } else if (msg.type === 'emote') {
+            handleEmote(msg.payload.emoji, msg.payload.square, true);
+        } else if (msg.type === 'restart') {
+            resetGame(true);
+            toast("Host restarted the game.");
+        }
+    });
+  }, []);
+
+  const displayedBoard = React.useMemo(() => {
+      if (replayIndex === -1) return board;
+      const tempGame = new Chess();
+      const history = chessRef.current.history();
+      for (let i = 0; i <= replayIndex; i++) {
+          tempGame.move(history[i]);
+      }
+      return tempGame.board();
+  }, [replayIndex, board]);
+
+  const handleEmote = (emoji: string, originSquare?: string, remote = false) => {
+      const playerColor = boardOrientation === 'white' ? 'w' : 'b'; 
+      
+      let kingSquare = originSquare;
+      if (!kingSquare) {
+          // Find MY king if I triggered it
+           for(let r=0; r<8; r++) {
+              for(let c=0; c<8; c++) {
+                  const p = board[r][c];
+                  if(p && p.type === 'k' && p.color === playerColor) kingSquare = `${['a','b','c','d','e','f','g','h'][c]}${['8','7','6','5','4','3','2','1'][r]}`;
+              }
+          }
+      }
+
+      if(kingSquare) {
+          playEmoteSound();
+          const id = Date.now().toString();
+          setEmotes(prev => [...prev, { id, emoji, square: kingSquare! }]);
+          setTimeout(() => setEmotes(prev => prev.filter(e => e.id !== id)), 2000);
+          
+          if (!remote && gameMode === 'online') {
+              peerService.send({ type: 'emote', payload: { emoji, square: kingSquare } });
+          }
+      }
+  };
+
+  const addXp = (amount: number) => {
+      // Only for AI Mode
+      if (gameMode !== 'ai') return;
+      
+      setXpState(prev => {
+          let newCurrent = prev.current + amount;
+          let newLevel = prev.level;
+          let newMax = prev.max;
+          if (newCurrent >= newMax) {
+              newLevel++;
+              newCurrent -= newMax;
+              newMax = Math.floor(newMax * 1.2);
+              playLevelUpSound();
+              toast(`Level Up! You are now Lvl ${newLevel}`, { icon: '🆙', style: { background: '#fbbf24', color: '#000' } });
+          }
+          return { current: newCurrent, level: newLevel, max: newMax };
+      });
+  };
+
+  const triggerAnimation = (type: AnimationType | 'crit', targetSquare: string, variant: '1x1' | '3x3') => {
+      setBoardEffect({ type, targetSquare, variant });
+      switch(type) {
+          case 'crit': playCritSound(); break;
+          case 'thunderbolt': playThunderSound(); break;
+          case 'fireblast': playFireSound(); break;
+          case 'psychic': case 'shadowball': playPsychicSound(); break;
+          case 'slam': case 'rockslide': playSlamSound(); break;
+          case 'teleport': playTeleportSound(); break;
+          case 'shadow': playGhostSound(); break;
+          default: playMoveSound();
+      }
+      setTimeout(() => setBoardEffect(null), 800);
+  };
+
+  const handleGameOver = useCallback((winner?: 'w' | 'b' | 'draw', reason?: string) => {
+      const game = chessRef.current;
+      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+      
+      const actualWinner = winner || (game.turn() === 'w' ? 'b' : 'w');
+      const isDraw = winner === 'draw' || game.isDraw();
+
+      if (isDraw) {
+          toast("It's a Draw!", { icon: '🤝' });
+      } else {
+          playWinSound();
+          confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+          const winText = actualWinner === 'w' ? "White Wins!" : "Black Wins!";
+          toast(winText, { icon: '🏆' });
+
+          // Update Scoreboard for P2P/Online
+          if (gameMode !== 'ai') {
+              setP2pScore(prev => ({
+                  white: actualWinner === 'w' ? prev.white + 1 : prev.white,
+                  black: actualWinner === 'b' ? prev.black + 1 : prev.black
+              }));
+          } else {
+              // XP for AI Mode
+              if (actualWinner === (boardOrientation === 'white' ? 'w' : 'b')) {
+                   addXp(100);
+                   setTrainerStats(prev => ({...prev, wins: prev.wins + 1, currentStreak: prev.currentStreak + 1, gamesPlayed: prev.gamesPlayed + 1}));
+              } else {
+                   setTrainerStats(prev => ({...prev, losses: prev.losses + 1, currentStreak: 0, gamesPlayed: prev.gamesPlayed + 1}));
+              }
+          }
+      }
+  }, [boardOrientation, gameMode]);
+
+  // Timer logic
+  useEffect(() => {
+    if (view !== 'game' || chessRef.current.isGameOver()) return;
+    timerIntervalRef.current = window.setInterval(() => {
+        if (turn === 'w') {
+            setWhiteTime(prev => prev <= 1 ? (handleGameOver('b', 'Timeout'), 0) : prev - 1);
+        } else {
+            setBlackTime(prev => prev <= 1 ? (handleGameOver('w', 'Timeout'), 0) : prev - 1);
+        }
+    }, 1000);
+    return () => { if (timerIntervalRef.current) clearInterval(timerIntervalRef.current); };
+  }, [view, turn, handleGameOver]);
+
+  const updateGameState = useCallback((move?: Move, remoteMove = false) => {
+    const game = chessRef.current;
+    setBoard(game.board());
+    setTurn(game.turn());
+    
+    // Captured pieces logic
+    const currentPieces: Record<string, number> = { wp:0, wn:0, wb:0, wr:0, wq:0, wk:0, bp:0, bn:0, bb:0, br:0, bq:0, bk:0 };
+    game.board().flat().forEach(p => { if (p) currentPieces[`${p.color}${p.type}`]++; });
+    const startingCounts: Record<string, number> = { wp:8, wn:2, wb:2, wr:2, wq:1, wk:1, bp:8, bn:2, bb:2, br:2, bq:1, bk:1 };
+    
+    const newCapturedWhite: PieceType[] = [];
+    const newCapturedBlack: PieceType[] = [];
+    (['p','n','b','r','q'] as PieceType[]).forEach(t => {
+        for(let i=0; i < startingCounts[`w${t}`] - (currentPieces[`w${t}`] || 0); i++) newCapturedWhite.push(t);
+        for(let i=0; i < startingCounts[`b${t}`] - (currentPieces[`b${t}`] || 0); i++) newCapturedBlack.push(t);
+    });
+    setCapturedWhite(newCapturedWhite);
+    setCapturedBlack(newCapturedBlack);
+
+    if (move) {
+        // Send to peer if online and local move
+        if (gameMode === 'online' && !remoteMove) {
+            peerService.send({ type: 'move', payload: { from: move.from, to: move.to, promotion: move.promotion } });
+        }
+
+        // Missions (Only AI)
+        if (gameMode === 'ai') {
+             setMissions(prev => prev.map(m => {
+                if (m.completed) return m;
+                let p = 0;
+                if (m.type === 'capture' && (move.flags.includes('c') || move.flags.includes('e'))) p=1;
+                if (m.type === 'move') p=1;
+                if (m.type === 'check' && game.inCheck()) p=1;
+                if(p>0) {
+                     const nc = m.current + p;
+                     if(nc>=m.target) { toast(`Mission: ${m.description}`, {icon: '🎖️'}); addXp(m.rewardXp); return {...m, current:nc, completed:true}; }
+                     return {...m, current:nc};
+                }
+                return m;
+            }));
+        }
+
+        const isCapture = move.flags.includes('c') || move.flags.includes('e');
+        const theme = move.color === 'w' ? whiteTheme : blackTheme;
+        const pokemon = TEAM_PRESETS[theme][move.piece];
+        const primaryType = pokemon.types[0];
+
+        if (isCapture) {
+            if (Math.random() < 0.15) {
+                triggerAnimation('crit', move.to, '3x3');
+                addXp(50);
+            } else {
+                const attackType = SPECIAL_ATTACKS[primaryType] || 'rockslide';
+                triggerAnimation(attackType, move.to, '3x3');
+                addXp(20);
+            }
+        } else {
+            const moveType = MOVE_ANIMATIONS[primaryType];
+            if (moveType) triggerAnimation(moveType, move.to, '1x1');
+            else game.inCheck() ? playCheckSound() : playMoveSound();
+        }
+    }
+    
+    if (gameVariant === 'koth' && move && move.piece === 'k' && KOTH_SQUARES.includes(move.to)) {
+         handleGameOver(move.color, 'King of the Hill');
+         return;
+    }
+    if (game.isGameOver()) handleGameOver();
+
+  }, [handleGameOver, whiteTheme, blackTheme, gameVariant, gameMode]);
+
+  const handleVoiceCommand = useCallback((transcript: string) => {
+      if (isAiThinking || chessRef.current.isGameOver() || replayIndex !== -1) return;
+      const parsedMove = parseVoiceCommand(transcript);
+      if (parsedMove) {
+          try {
+              const move = chessRef.current.move(parsedMove); 
+              if (move) {
+                  setLastMove({ from: move.from, to: move.to });
+                  updateGameState(move);
+                  toast.success(`Voice Move: ${move.san}`);
+              } else {
+                  toast.error(`Invalid move: ${parsedMove}`);
+              }
+          } catch (e) {
+              toast.error("Illegal move.");
+          }
+      } else {
+          toast.error("Command not recognized.");
+      }
+  }, [isAiThinking, updateGameState, replayIndex]); 
+
+  const onStartBtnClick = (mode: GameMode) => { 
+      setGameMode(mode); 
+      if (mode === 'online') {
+          setShowOnlineModal(true);
+      } else {
+          setShowSetupModal(true); 
+      }
+  };
+
+  const handleOnlineJoin = (isHost: boolean) => {
+      setShowOnlineModal(false);
+      if (isHost) {
+          setShowSetupModal(true); // Host chooses settings
+      } else {
+          setBoardOrientation('black'); // Joiner is black
+          setView('game'); // Joiner waits for config
+      }
+  };
+
+  const handleSetupConfirm = (variant: GameVariant, wTheme: TeamTheme, bTheme: TeamTheme) => {
+      setGameVariant(variant); setWhiteTheme(wTheme); setBlackTheme(bTheme); setShowSetupModal(false); 
+      if (gameMode === 'online') {
+          // Send config to joiner
+          peerService.send({ type: 'config', payload: { variant, wTheme, bTheme } });
+      }
+      startGame();
+  };
+
+  const startGame = (playSound = true) => {
+    setView('loading');
+    if (gameMode !== 'online') setBoardOrientation('white');
+    if (playSound) playStartSound();
+    
+    setTimeout(() => {
+        chessRef.current = new Chess();
+        setWhiteTime(INITIAL_TIME); setBlackTime(INITIAL_TIME);
+        setLastMove(null); setSelectedSquare(null); setValidDestinations([]);
+        setCommentary(""); setEmotes([]); setXpState(prev => ({...prev, current: prev.current}));
+        setReplayIndex(-1);
+        updateGameState();
+        setView('game');
+    }, 1500);
+  };
+  
+  const resetGame = (remote = false) => {
+      if (gameMode === 'online' && !remote) {
+          peerService.send({ type: 'restart', payload: {} });
+      }
+      startGame();
+  };
+  
+  const exitToLanding = () => { setView('landing'); if(timerIntervalRef.current) clearInterval(timerIntervalRef.current); };
+
+  const makeAIMove = useCallback(async () => {
+    const game = chessRef.current;
+    if (game.isGameOver() || game.turn() === 'w') return;
+    setIsAiThinking(true);
+    try {
+        const aiResult = await getAIMove(game.fen(), game.moves(), difficulty, game.history());
+        const move = game.move(aiResult.move);
+        if (move) {
+            setLastMove({ from: move.from, to: move.to });
+            setCommentary(aiResult.commentary);
+            updateGameState(move);
+        }
+    } catch (e) { console.error(e); } finally { setIsAiThinking(false); }
+  }, [difficulty, updateGameState]);
+
+  useEffect(() => {
+    if (gameMode === 'ai' && turn === 'b' && !chessRef.current.isGameOver()) {
+        const t = setTimeout(makeAIMove, 500);
+        return () => clearTimeout(t);
+    }
+  }, [turn, makeAIMove, gameMode]);
+
+  const handleSquareClick = (square: Square) => {
+    if (replayIndex !== -1) return;
+    const game = chessRef.current;
+    if (isAiThinking || game.isGameOver() || promotionMove) return;
+    
+    // AI Mode Logic
+    if (gameMode === 'ai' && game.turn() === 'b') return;
+    
+    // Online Mode Logic
+    if (gameMode === 'online') {
+        const myColor = boardOrientation === 'white' ? 'w' : 'b';
+        if (game.turn() !== myColor) return;
+    }
+
+    if (selectedSquare === square) { setSelectedSquare(null); setValidDestinations([]); return; }
+
+    if (selectedSquare) {
+        const piece = game.get(selectedSquare);
+        // Promotion check
+        if (piece?.type === 'p' && ((piece.color === 'w' && square[1] === '8') || (piece.color === 'b' && square[1] === '1'))) {
+            if (validDestinations.includes(square)) { setPromotionMove({ from: selectedSquare, to: square }); return; }
+        }
+        try {
+            const moveResult = game.move({ from: selectedSquare, to: square, promotion: 'q' });
+            if (moveResult) {
+                setLastMove({ from: moveResult.from, to: moveResult.to });
+                setSelectedSquare(null); setValidDestinations([]);
+                updateGameState(moveResult);
+                return;
+            }
+        } catch {}
+    }
+
+    const piece = game.get(square);
+    if (piece && piece.color === game.turn()) {
+        setSelectedSquare(square);
+        setValidDestinations(game.moves({ square, verbose: true }).map(m => m.to));
+    } else { setSelectedSquare(null); setValidDestinations([]); }
+  };
+
+  const handlePromotionSelect = (type: PieceType) => {
+      if (!promotionMove) return;
+      const game = chessRef.current;
+      const move = game.move({ from: promotionMove.from, to: promotionMove.to, promotion: type });
+      if (move) { setLastMove({ from: move.from, to: move.to }); updateGameState(move); playPsychicSound(); }
+      setPromotionMove(null); setSelectedSquare(null); setValidDestinations([]);
+  };
+
+  const undoMove = () => {
+    if (isAiThinking || replayIndex !== -1 || gameMode === 'online') return; // Disable Undo in online
+    const game = chessRef.current;
+    if(game.history().length === 0) return;
+    game.undo();
+    if(gameMode === 'ai') game.undo(); 
+    setLastMove(null); setSelectedSquare(null); setValidDestinations([]);
+    playMoveSound(); updateGameState();
+  };
+
+  if (view === 'hero') return <HeroPage onEnter={() => { playStartSound(); setView('onboarding'); }} />;
+  if (view === 'onboarding') return <div className="min-h-screen bg-gray-900"><Onboarding onComplete={() => setView('landing')} /></div>;
+  if (view === 'landing') return (
+        <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center font-sans overflow-hidden relative">
+            <Toaster position="top-center" />
+            <button onClick={() => setShowPokedex(true)} className="absolute top-4 right-4 bg-red-600 text-white px-4 py-2 rounded-lg font-bold shadow-lg border-2 border-red-800 hover:bg-red-500 z-50">📖 Pokedex</button>
+            {showPokedex && <Pokedex onClose={() => setShowPokedex(false)} />}
+            {showOnlineModal && <OnlineModal onJoin={handleOnlineJoin} onCancel={() => setShowOnlineModal(false)} />}
+            {showSetupModal && <TeamSelectionModal gameMode={gameMode} onConfirm={handleSetupConfirm} onCancel={() => setShowSetupModal(false)} />}
+            <LandingPage onStartGame={onStartBtnClick} />
+        </div>
+  );
+  if (view === 'loading') return <div className="min-h-screen bg-gray-900 flex items-center justify-center"><p className="text-white font-pixel animate-pulse">LOADING...</p></div>;
+
+  return (
+    <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center p-4 lg:p-8 font-sans overflow-hidden relative">
+      <Toaster position="top-center" />
+      {promotionMove && <PromotionModal color={turn} onSelect={handlePromotionSelect} onClose={() => setPromotionMove(null)} />}
+      
+      {/* Background Decor */}
+      <div className="absolute inset-0 pointer-events-none opacity-20 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-blue-900 via-gray-900 to-black animate-pulse"></div>
+      
+      <div className="z-10 flex flex-col lg:flex-row gap-6 items-start justify-center w-full max-w-6xl animate-fadeIn">
+        <div className="flex-grow w-full flex justify-center lg:justify-end">
+            <ChessBoard 
+                game={chessRef.current} board={displayedBoard} selectedSquare={selectedSquare}
+                possibleMoves={validDestinations} lastMove={lastMove} onSquareClick={handleSquareClick}
+                orientation={boardOrientation} boardEffect={boardEffect}
+                whiteTheme={whiteTheme} blackTheme={blackTheme} gameVariant={gameVariant}
+                emotes={emotes}
+            />
+        </div>
+        <div className="w-full lg:w-96 flex-shrink-0">
+            <GameInfo 
+                game={chessRef.current} capturedWhite={capturedWhite} capturedBlack={capturedBlack}
+                commentary={commentary} difficulty={difficulty} gameMode={gameMode} orientation={boardOrientation}
+                setDifficulty={setDifficulty} resetGame={() => resetGame()} undoMove={undoMove} onFlipBoard={() => setBoardOrientation(p => p === 'white' ? 'black' : 'white')}
+                onExit={exitToLanding} isAiThinking={isAiThinking} whiteTime={whiteTime} blackTime={blackTime}
+                whiteTheme={whiteTheme} blackTheme={blackTheme} xpState={xpState} 
+                missions={missions} trainerStats={trainerStats} isGameOver={chessRef.current.isGameOver()}
+                onEmote={(e) => handleEmote(e, undefined)} onVoiceCommand={handleVoiceCommand}
+                replayIndex={replayIndex} setReplayIndex={setReplayIndex}
+                p2pScore={p2pScore}
+            />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default App;
