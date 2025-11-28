@@ -40,6 +40,7 @@ const App: React.FC = () => {
   
   const [view, setView] = useState<AppView>('hero');
   const [gameMode, setGameMode] = useState<GameMode>('ai');
+  const [isHost, setIsHost] = useState(true);
   const [showSetupModal, setShowSetupModal] = useState(false);
   const [showOnlineModal, setShowOnlineModal] = useState(false);
   const [showPokedex, setShowPokedex] = useState(false);
@@ -347,12 +348,15 @@ const App: React.FC = () => {
       }
   };
 
-  const handleOnlineJoin = (isHost: boolean) => {
+  const handleOnlineJoin = (hostStatus: boolean) => {
+      setIsHost(hostStatus);
       setShowOnlineModal(false);
-      if (isHost) {
+      if (hostStatus) {
+          setBoardOrientation('white');
           setShowSetupModal(true); 
       } else {
-          setBoardOrientation('black'); 
+          setBoardOrientation('black');
+          toast('You are playing as BLACK - board auto-flipped!', { icon: '♚', duration: 3000 });
           setView('game'); 
       }
   };
@@ -423,7 +427,8 @@ const App: React.FC = () => {
     if (gameMode === 'ai' && game.turn() === 'b') return;
     
     if (gameMode === 'online') {
-        const myColor = boardOrientation === 'white' ? 'w' : 'b';
+        // In online mode: host is white, guest is black
+        const myColor = isHost ? 'w' : 'b';
         if (game.turn() !== myColor) return;
     }
 
@@ -587,6 +592,7 @@ const App: React.FC = () => {
                     inventory={inventory}
                     onBuyItem={handleBuyItem}
                     onOpenTower={() => setView('tower')}
+                    isHost={isHost}
                 />
             </div>
         </PageTransition>

@@ -40,7 +40,8 @@ interface GameInfoProps {
   coins: number; 
   inventory: string[];
   onBuyItem: (item: ShopItem) => void;
-  onOpenTower: () => void; 
+  onOpenTower: () => void;
+  isHost?: boolean;
 }
 
 const formatTime = (seconds: number) => {
@@ -54,7 +55,7 @@ const GameInfo: React.FC<GameInfoProps> = ({
   orientation, setDifficulty, resetGame, undoMove, onFlipBoard, onExit,
   isAiThinking, whiteTime, blackTime, whiteTheme, blackTheme, xpState, 
   missions, trainerStats, isGameOver, onEmote, onVoiceCommand,
-  replayIndex, setReplayIndex, p2pScore, coins, inventory, onBuyItem, onOpenTower
+  replayIndex, setReplayIndex, p2pScore, coins, inventory, onBuyItem, onOpenTower, isHost = true
 }) => {
   const [activeTab, setActiveTab] = useState<'moves' | 'chat' | 'shop' | 'profile'>('moves');
   const [chatHistory, setChatHistory] = useState<{role: string, text: string}[]>([]);
@@ -187,6 +188,11 @@ const GameInfo: React.FC<GameInfoProps> = ({
                      <button onClick={toggleDifficulty} className="text-[9px] font-bold uppercase tracking-wider px-2 py-1 bg-slate-800 rounded border border-slate-600 hover:border-slate-400 text-slate-300">
                          {difficulty}
                      </button>
+                 )}
+                 {gameMode === 'online' && (
+                     <div className="text-[9px] font-bold uppercase tracking-wider px-3 py-1.5 bg-slate-800 rounded border border-slate-600">
+                         <span className={isHost ? 'text-yellow-300' : 'text-gray-300'}>{isHost ? '♔ White' : '♚ Black'}</span>
+                     </div>
                  )}
                  <div className="bg-slate-950/40 px-3 py-1.5 rounded-lg border border-white/5 flex items-center gap-2 shadow-inner">
                       <span className="text-xs">🪙</span>
