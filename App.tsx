@@ -16,7 +16,7 @@ import { getAIMove } from './services/geminiService';
 import { GameDifficulty, PieceType, GameMode, AppView, BoardOrientation, BoardEffect, AnimationType, TeamTheme, GameVariant, Emote, XPState, Mission, TrainerStats, ShopItem } from './types';
 import { SPECIAL_ATTACKS, MOVE_ANIMATIONS, TEAM_PRESETS, KOTH_SQUARES, DAILY_MISSIONS, ACHIEVEMENTS } from './constants';
 import { parseVoiceCommand } from './utils/voiceControl';
-import { peerService } from './utils/peerService';
+import { peerService, PeerStatus } from './utils/peerService';
 import { Toaster, toast } from 'react-hot-toast';
 import confetti from 'canvas-confetti';
 import { 
@@ -81,9 +81,49 @@ const App: React.FC = () => {
   });
   const [replayIndex, setReplayIndex] = useState(-1);
 
-  // --- ONLINE LOGIC ---
+  const [peerStatus, setPeerStatus] = useState<PeerStatus>(() => peerService.getStatus());
+  const previousPeerStatusRef = useRef<PeerStatus>(peerService.getStatus());
+
   useEffect(() => {
-    peerService.onData((msg) => {
+    const unsubscribe = peerService.onStatusChange((status) => {
+      setPeerStatus(status);
+    });
+
+    setPeerStatus(peerService.getStatus());
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    const prevStatus = previousPeerStatusRef.current;
+
+    if (gameMode === 'online') {
+      if (peerStatus === 'reconnecting' && prevStatus === 'open') {
+        toast.error('Connection lost. Attempting to reconnect...', {
+          icon: '⚠️',
+          duration: 4000
+        });
+      }
+
+      if (peerStatus === 'open' && (prevStatus === 'reconnecting' || prevStatus === 'connecting')) {
+        toast.success('Reconnected to opponent.', { icon: '✅' });
+      }
+
+      if (peerStatus === 'closed' && prevStatus !== 'closed' && prevStatus !== 'idle') {
+        toast.error('Connection closed.', {
+          icon: '❌',
+          duration: 5000
+        });
+      }
+    }
+
+    previousPeerStatusRef.current = peerStatus;
+  }, [peerStatus, gameMode]);
+
+  useEffect(() => {
+    const unsubscribe = peerService.onData((msg) => {
         if (msg.type === 'move') {
             const moveData = msg.payload;
             const game = chessRef.current;
@@ -108,6 +148,10 @@ const App: React.FC = () => {
             toast("Host restarted the game.");
         }
     });
+
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   const displayedBoard = React.useMemo(() => {
@@ -133,17 +177,21 @@ const App: React.FC = () => {
           }
       }
 
-      if(kingSquare) {
+      if (kingSquare) {
           playEmoteSound();
           const id = Date.now().toString();
           setEmotes(prev => [...prev, { id, emoji, square: kingSquare! }]);
           setTimeout(() => setEmotes(prev => prev.filter(e => e.id !== id)), 2000);
-          
+
           if (!remote && gameMode === 'online') {
-              peerService.send({ type: 'emote', payload: { emoji, square: kingSquare } });
+              if (peerStatus === 'open') {
+                  peerService.send({ type: 'emote', payload: { emoji, square: kingSquare } });
+              } else {
+                  toast.error('Cannot send emote while connection is down.', { id: 'peer-emote-block' });
+              }
           }
       }
-  };
+      };
 
   const addXp = (amount: number) => {
       if (gameMode !== 'ai') return;
@@ -240,6 +288,15 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (view !== 'game' || chessRef.current.isGameOver()) return;
+    
+    if (gameMode === 'online' && peerStatus !== 'open') {
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+        timerIntervalRef.current = null;
+      }
+      return;
+    }
+    
     timerIntervalRef.current = window.setInterval(() => {
         if (turn === 'w') {
             setWhiteTime(prev => prev <= 1 ? (handleGameOver('b', 'Timeout'), 0) : prev - 1);
@@ -248,7 +305,7 @@ const App: React.FC = () => {
         }
     }, 1000);
     return () => { if (timerIntervalRef.current) clearInterval(timerIntervalRef.current); };
-  }, [view, turn, handleGameOver]);
+  }, [view, turn, handleGameOver, gameMode, peerStatus]);
 
   const updateGameState = useCallback((move?: Move, remoteMove = false) => {
     const game = chessRef.current;
@@ -270,7 +327,11 @@ const App: React.FC = () => {
 
     if (move) {
         if (gameMode === 'online' && !remoteMove) {
-            peerService.send({ type: 'move', payload: { from: move.from, to: move.to, promotion: move.promotion } });
+            if (peerStatus === 'open') {
+                peerService.send({ type: 'move', payload: { from: move.from, to: move.to, promotion: move.promotion } });
+            } else {
+                console.warn('Skipped sending move because connection is not open:', peerStatus);
+            }
         }
 
         if (gameMode === 'ai') {
@@ -316,7 +377,7 @@ const App: React.FC = () => {
     }
     if (game.isGameOver()) handleGameOver();
 
-  }, [handleGameOver, whiteTheme, blackTheme, gameVariant, gameMode]);
+  }, [handleGameOver, whiteTheme, blackTheme, gameVariant, gameMode, peerStatus]);
 
   const handleVoiceCommand = useCallback((transcript: string) => {
       if (isAiThinking || chessRef.current.isGameOver() || replayIndex !== -1) return;
@@ -340,6 +401,10 @@ const App: React.FC = () => {
   }, [isAiThinking, updateGameState, replayIndex]); 
 
   const onStartBtnClick = (mode: GameMode) => { 
+      if (gameMode === 'online' && mode !== 'online') {
+          peerService.disconnect();
+      }
+
       setGameMode(mode); 
       if (mode === 'online') {
           setShowOnlineModal(true);
@@ -364,7 +429,11 @@ const App: React.FC = () => {
   const handleSetupConfirm = (variant: GameVariant, wTheme: TeamTheme, bTheme: TeamTheme) => {
       setGameVariant(variant); setWhiteTheme(wTheme); setBlackTheme(bTheme); setShowSetupModal(false); 
       if (gameMode === 'online') {
-          peerService.send({ type: 'config', payload: { variant, wTheme, bTheme } });
+          if (peerStatus === 'open') {
+              peerService.send({ type: 'config', payload: { variant, wTheme, bTheme } });
+          } else {
+              toast.error('Unable to send configuration while disconnected.', { id: 'peer-config-block' });
+          }
       }
       startGame();
   };
@@ -387,12 +456,19 @@ const App: React.FC = () => {
   
   const resetGame = (remote = false) => {
       if (gameMode === 'online' && !remote) {
-          peerService.send({ type: 'restart', payload: {} });
+          if (peerStatus === 'open') {
+              peerService.send({ type: 'restart', payload: {} });
+          } else {
+              toast.error('Unable to send restart while disconnected.', { id: 'peer-restart-block' });
+          }
       }
       startGame();
   };
   
-  const exitToLanding = () => { 
+  const exitToLanding = () => {
+      if (gameMode === 'online') {
+          peerService.disconnect();
+      }
       setView('landing'); 
       if(timerIntervalRef.current) clearInterval(timerIntervalRef.current); 
   };
@@ -421,6 +497,16 @@ const App: React.FC = () => {
 
   const handleSquareClick = useCallback((square: Square) => {
     if (replayIndex !== -1) return;
+    if (gameMode === 'online' && peerStatus !== 'open') {
+        const message = peerStatus === 'connecting'
+            ? 'Connection is still being established...'
+            : peerStatus === 'reconnecting'
+                ? 'Reconnecting to your opponent. Please wait.'
+                : 'Connection unavailable. Try again once connected.';
+        toast.error(message, { id: 'peer-connection-block' });
+        return;
+    }
+
     const game = chessRef.current;
     if (isAiThinking || game.isGameOver() || promotionMove) return;
     
@@ -455,7 +541,7 @@ const App: React.FC = () => {
         setSelectedSquare(square);
         setValidDestinations(game.moves({ square, verbose: true }).map(m => m.to));
     } else { setSelectedSquare(null); setValidDestinations([]); }
-  }, [boardOrientation, gameMode, isAiThinking, promotionMove, replayIndex, selectedSquare, updateGameState, validDestinations]);
+  }, [boardOrientation, gameMode, isAiThinking, promotionMove, replayIndex, selectedSquare, updateGameState, validDestinations, isHost, peerStatus]);
 
   const handlePromotionSelect = (type: PieceType) => {
       if (!promotionMove) return;
@@ -527,18 +613,34 @@ const App: React.FC = () => {
       
       {view === 'landing' && (
           <PageTransition className="z-20 w-full h-full flex flex-col relative">
-             <button 
-                onClick={() => setShowPokedex(true)} 
+             <button
+                onClick={() => setShowPokedex(true)}
                 className="fixed top-3 right-3 sm:top-6 sm:right-6 bg-red-600/90 backdrop-blur text-white p-2 sm:px-4 sm:py-2 rounded-full font-bold shadow-glass hover:shadow-neon-red hover:bg-red-500 hover:scale-105 active:scale-95 transition-all z-50 flex items-center gap-2 border border-red-400/30"
                 aria-label="Open Pokedex"
              >
                  <BookOpen size={20} /> <span className="hidden sm:inline">Pokedex</span>
              </button>
              {showPokedex && <Pokedex onClose={() => setShowPokedex(false)} />}
-             {showOnlineModal && <OnlineModal onJoin={handleOnlineJoin} onCancel={() => setShowOnlineModal(false)} />}
-             {showSetupModal && <TeamSelectionModal gameMode={gameMode} onConfirm={handleSetupConfirm} onCancel={() => setShowSetupModal(false)} inventory={inventory} />}
-             <LandingPage 
-                 onStartGame={onStartBtnClick} 
+             {showOnlineModal && (
+                 <OnlineModal
+                     onJoin={handleOnlineJoin}
+                     onCancel={() => {
+                         peerService.disconnect();
+                         setShowOnlineModal(false);
+                         setGameMode('ai');
+                     }}
+                 />
+             )}
+             {showSetupModal && (
+                 <TeamSelectionModal
+                     gameMode={gameMode}
+                     onConfirm={handleSetupConfirm}
+                     onCancel={() => setShowSetupModal(false)}
+                     inventory={inventory}
+                 />
+             )}
+             <LandingPage
+                 onStartGame={onStartBtnClick}
                  xpState={xpState}
                  trainerStats={trainerStats}
                  missions={missions}
