@@ -6,7 +6,7 @@ import { TEAM_PRESETS, LEAGUES } from '../constants';
 import PokemonPiece from './PokemonPiece';
 import ShopList from './ShopList';
 import ProfileView from './ProfileView';
-import { Send, Mic, Play, SkipBack, SkipForward, Rewind, LogOut, RotateCcw, Repeat, CheckCircle2, RotateCw, BrainCircuit } from 'lucide-react';
+import { Send, Mic, Play, SkipBack, SkipForward, Rewind, LogOut, RotateCcw, Repeat, CheckCircle2, RotateCw, BrainCircuit, RefreshCw } from 'lucide-react';
 import { getAIChatResponse } from '../services/geminiService';
 import { toast } from 'react-hot-toast';
 
@@ -42,6 +42,7 @@ interface GameInfoProps {
   onBuyItem: (item: ShopItem) => void;
   onOpenTower: () => void;
   isHost?: boolean;
+  onResyncBoard?: () => void;
 }
 
 const formatTime = (seconds: number) => {
@@ -55,7 +56,8 @@ const GameInfo: React.FC<GameInfoProps> = ({
   orientation, setDifficulty, resetGame, undoMove, onFlipBoard, onExit,
   isAiThinking, whiteTime, blackTime, whiteTheme, blackTheme, xpState, 
   missions, trainerStats, isGameOver, onEmote, onVoiceCommand,
-  replayIndex, setReplayIndex, p2pScore, coins, inventory, onBuyItem, onOpenTower, isHost = true
+  replayIndex, setReplayIndex, p2pScore, coins, inventory, onBuyItem, onOpenTower, isHost = true,
+  onResyncBoard
 }) => {
   const [activeTab, setActiveTab] = useState<'moves' | 'chat' | 'shop' | 'profile'>('moves');
   const [chatHistory, setChatHistory] = useState<{role: string, text: string}[]>([]);
@@ -162,6 +164,7 @@ const GameInfo: React.FC<GameInfoProps> = ({
   const bottomLabel = gameMode === 'ai' ? 'You' : (gameMode === 'online' ? 'You' : 'Player 1');
 
   const league = LEAGUES.slice().reverse().find(l => trainerStats.rating >= l.minRating) || LEAGUES[0];
+  const showResyncButton = gameMode === 'online' && !isHost && Boolean(onResyncBoard);
 
   return (
     <div className="flex flex-col w-full h-[600px] lg:h-[700px] glass-panel rounded-2xl shadow-2xl overflow-hidden font-sans border border-slate-700/50 backdrop-blur-xl">
@@ -386,7 +389,7 @@ const GameInfo: React.FC<GameInfoProps> = ({
             </div>
 
             {/* Action Buttons */}
-            <div className="p-3 bg-slate-950/60 grid grid-cols-4 gap-2 border-t border-white/5">
+            <div className={`p-3 bg-slate-950/60 grid gap-2 border-t border-white/5 ${showResyncButton ? 'grid-cols-5' : 'grid-cols-4'}`}>
                 <button 
                     onClick={undoMove} 
                     disabled={gameMode !== 'ai'} 
@@ -401,6 +404,17 @@ const GameInfo: React.FC<GameInfoProps> = ({
                     <Repeat size={14} />
                 </button>
                 
+                {/* Resync Button - Only for Guests in Online Mode */}
+                {showResyncButton && (
+                    <button
+                        onClick={onResyncBoard}
+                        className="flex flex-col items-center justify-center bg-slate-800 hover:bg-slate-700 text-blue-400 hover:text-blue-300 py-2 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all border border-blue-500/20 btn-press h-10 hover:border-blue-500/50"
+                        title="Request board resync from host"
+                    >
+                        <RefreshCw size={14} />
+                    </button>
+                )}
+
                 {/* Reset */}
                 <button 
                     onClick={() => handleDestructiveAction('reset')} 

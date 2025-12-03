@@ -13,7 +13,11 @@ import Pokedex from './components/Pokedex';
 import './index.css';
 import TrainerTower from './components/TrainerTower'; 
 import { getAIMove } from './services/geminiService';
-import { GameDifficulty, PieceType, GameMode, AppView, BoardOrientation, BoardEffect, AnimationType, TeamTheme, GameVariant, Emote, XPState, Mission, TrainerStats, ShopItem } from './types';
+import { 
+    GameDifficulty, PieceType, GameMode, AppView, BoardOrientation, BoardEffect, AnimationType,
+    TeamTheme, GameVariant, Emote, XPState, Mission, TrainerStats, ShopItem,
+    OnlineMovePayload, OnlineSyncSnapshotPayload, OnlineSyncAckPayload, OnlineMessage
+} from './types';
 import { SPECIAL_ATTACKS, MOVE_ANIMATIONS, TEAM_PRESETS, KOTH_SQUARES, DAILY_MISSIONS, ACHIEVEMENTS } from './constants';
 import { parseVoiceCommand } from './utils/voiceControl';
 import { peerService } from './utils/peerService';
@@ -27,6 +31,17 @@ import {
 import { BookOpen } from 'lucide-react';
 
 const INITIAL_TIME = 600;
+
+// Simple hash function for FEN strings
+const hashFEN = (fen: string): string => {
+    let hash = 0;
+    for (let i = 0; i < fen.length; i++) {
+        const char = fen.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash; // Convert to 32bit integer
+    }
+    return hash.toString(36);
+};
 
 // Simple Page Transition Wrapper
 const PageTransition = ({ children, className = "" }: { children?: React.ReactNode; className?: string }) => (
@@ -66,6 +81,12 @@ const App: React.FC = () => {
   const [whiteTime, setWhiteTime] = useState(INITIAL_TIME);
   const [blackTime, setBlackTime] = useState(INITIAL_TIME);
   const timerIntervalRef = useRef<number | null>(null);
+  const whiteTimeRef = useRef(whiteTime);
+  const blackTimeRef = useRef(blackTime);
+  const isHostRef = useRef(isHost);
+  const syncInFlightRef = useRef(false);
+  const syncToastIdRef = useRef<string | undefined>(undefined);
+  const syncTimeoutRef = useRef<number | undefined>(undefined);
 
   // Stats & Economy
   const [xpState, setXpState] = useState<XPState>({ current: 0, level: 1, max: 100 });
@@ -74,6 +95,7 @@ const App: React.FC = () => {
   const [unlockedAchievements, setUnlockedAchievements] = useState<string[]>([]);
 
   const [p2pScore, setP2pScore] = useState({ white: 0, black: 0 }); 
+  const p2pScoreRef = useRef(p2pScore);
   const [emotes, setEmotes] = useState<Emote[]>([]);
   const [missions, setMissions] = useState<Mission[]>(DAILY_MISSIONS);
   const [trainerStats, setTrainerStats] = useState<TrainerStats>({
@@ -81,34 +103,85 @@ const App: React.FC = () => {
   });
   const [replayIndex, setReplayIndex] = useState(-1);
 
-  // --- ONLINE LOGIC ---
-  useEffect(() => {
-    peerService.onData((msg) => {
-        if (msg.type === 'move') {
-            const moveData = msg.payload;
-            const game = chessRef.current;
-            try {
-                const move = game.move(moveData);
-                if (move) {
-                    setLastMove({ from: move.from, to: move.to });
-                    updateGameState(move, true); 
-                    toast.success("Opponent moved!");
-                }
-            } catch (e) { console.error("Invalid remote move", e); }
-        } else if (msg.type === 'config') {
-            const { variant, wTheme, bTheme } = msg.payload;
-            setGameVariant(variant);
-            setWhiteTheme(wTheme);
-            setBlackTheme(bTheme);
-            startGame(false); 
-        } else if (msg.type === 'emote') {
-            handleEmote(msg.payload.emoji, msg.payload.square, true);
-        } else if (msg.type === 'restart') {
-            resetGame(true);
-            toast("Host restarted the game.");
+  // Keep refs in sync with state for async callbacks
+  useEffect(() => { whiteTimeRef.current = whiteTime; }, [whiteTime]);
+  useEffect(() => { blackTimeRef.current = blackTime; }, [blackTime]);
+  useEffect(() => { p2pScoreRef.current = p2pScore; }, [p2pScore]);
+  useEffect(() => { isHostRef.current = isHost; }, [isHost]);
+
+  const buildSyncSnapshot = useCallback((reason?: string): OnlineSyncSnapshotPayload => {
+    const game = chessRef.current;
+    const fen = game.fen();
+    return {
+      fen,
+      fenHash: hashFEN(fen),
+      historyLength: game.history().length,
+      whiteTime: whiteTimeRef.current,
+      blackTime: blackTimeRef.current,
+      variant: gameVariant,
+      whiteTheme,
+      blackTheme,
+      score: { ...p2pScoreRef.current },
+      reason
+    };
+  }, [gameVariant, whiteTheme, blackTheme]);
+
+  const sendStateSnapshot = useCallback((reason?: string) => {
+    if (gameMode !== 'online' || !isHostRef.current) return;
+    const snapshot = buildSyncSnapshot(reason);
+    peerService.send({ type: 'state', payload: snapshot });
+  }, [buildSyncSnapshot, gameMode]);
+
+  const sendSyncRequest = useCallback((reason?: string) => {
+    if (gameMode !== 'online') return;
+
+    if (isHostRef.current) {
+      toast('Pushing board state to opponent...', { icon: '📤', duration: 2000 });
+      sendStateSnapshot(reason);
+      return;
+    }
+
+    if (syncInFlightRef.current) {
+      toast('Sync already in progress', { icon: '⏳', duration: 2000 });
+      return;
+    }
+
+    syncInFlightRef.current = true;
+    const message = reason ? `Requesting sync (${reason})...` : 'Requesting board sync...';
+    const toastId = toast.loading(message, { icon: '🔄' });
+    syncToastIdRef.current = toastId;
+
+    const snapshot = buildSyncSnapshot(reason);
+    peerService.send({ type: 'syncRequest', payload: snapshot });
+
+    // Auto-clear the sync flag after timeout (5 seconds)
+    if (syncTimeoutRef.current) window.clearTimeout(syncTimeoutRef.current);
+    syncTimeoutRef.current = window.setTimeout(() => {
+      if (syncInFlightRef.current) {
+        syncInFlightRef.current = false;
+        if (syncToastIdRef.current) {
+          toast.error('Sync request timed out', { id: syncToastIdRef.current });
+          syncToastIdRef.current = undefined;
         }
-    });
-  }, []);
+      }
+    }, 5000);
+  }, [buildSyncSnapshot, gameMode, sendStateSnapshot]);
+
+  const handleSyncDiscrepancy = useCallback((reason: string) => {
+    if (gameMode !== 'online') return;
+
+    if (isHostRef.current) {
+      toast.error(`Opponent desynced (${reason}). Sending canonical board.`, { duration: 3000 });
+      sendStateSnapshot(reason);
+    } else {
+      sendSyncRequest(reason);
+    }
+  }, [gameMode, sendStateSnapshot, sendSyncRequest]);
+
+  const handleManualResync = useCallback(() => {
+    if (gameMode !== 'online') return;
+    sendSyncRequest('Manual resync');
+  }, [gameMode, sendSyncRequest]);
 
   const displayedBoard = React.useMemo(() => {
       if (replayIndex === -1) return board;
@@ -270,7 +343,18 @@ const App: React.FC = () => {
 
     if (move) {
         if (gameMode === 'online' && !remoteMove) {
-            peerService.send({ type: 'move', payload: { from: move.from, to: move.to, promotion: move.promotion } });
+            const fen = game.fen();
+            peerService.send({
+                type: 'move',
+                payload: {
+                    from: move.from,
+                    to: move.to,
+                    promotion: move.promotion,
+                    fen,
+                    fenHash: hashFEN(fen),
+                    historyLength: game.history().length
+                } as OnlineMovePayload
+            });
         }
 
         if (gameMode === 'ai') {
@@ -317,6 +401,134 @@ const App: React.FC = () => {
     if (game.isGameOver()) handleGameOver();
 
   }, [handleGameOver, whiteTheme, blackTheme, gameVariant, gameMode]);
+
+  const applyRemoteState = useCallback((snapshot: OnlineSyncSnapshotPayload) => {
+    try {
+      const game = chessRef.current;
+      game.load(snapshot.fen);
+
+      whiteTimeRef.current = snapshot.whiteTime;
+      blackTimeRef.current = snapshot.blackTime;
+      p2pScoreRef.current = snapshot.score;
+
+      setWhiteTime(snapshot.whiteTime);
+      setBlackTime(snapshot.blackTime);
+      setGameVariant(snapshot.variant);
+      setWhiteTheme(snapshot.whiteTheme);
+      setBlackTheme(snapshot.blackTheme);
+      setP2pScore(snapshot.score);
+      setLastMove(null);
+      setSelectedSquare(null);
+      setValidDestinations([]);
+      setPromotionMove(null);
+      setBoardEffect(null);
+      setReplayIndex(-1);
+
+      updateGameState();
+
+      if (!isHostRef.current) {
+        if (syncToastIdRef.current) {
+          toast.success('Board synchronized', { id: syncToastIdRef.current });
+        } else if (snapshot.reason && snapshot.reason !== 'initial') {
+          toast.success('Board synchronized');
+        }
+        syncInFlightRef.current = false;
+        syncToastIdRef.current = undefined;
+        if (syncTimeoutRef.current) {
+          window.clearTimeout(syncTimeoutRef.current);
+          syncTimeoutRef.current = undefined;
+        }
+      } else if (snapshot.reason && snapshot.reason !== 'initial') {
+        toast.success('Applied board state');
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Failed to apply remote state', error);
+      if (!isHostRef.current) {
+        if (syncToastIdRef.current) {
+          toast.error('Failed to apply board sync', { id: syncToastIdRef.current });
+        } else {
+          toast.error('Failed to apply board sync');
+        }
+        syncInFlightRef.current = false;
+        syncToastIdRef.current = undefined;
+        if (syncTimeoutRef.current) {
+          window.clearTimeout(syncTimeoutRef.current);
+          syncTimeoutRef.current = undefined;
+        }
+      } else {
+        toast.error('Failed to apply remote state');
+      }
+      return false;
+    }
+  }, [updateGameState]);
+
+  const handleStateMessage = useCallback((payload: OnlineSyncSnapshotPayload) => {
+    const success = applyRemoteState(payload);
+
+    if (!isHostRef.current) {
+      const ackSnapshot = buildSyncSnapshot(payload.reason);
+      const ackPayload: OnlineSyncAckPayload = {
+        ...ackSnapshot,
+        success,
+        message: success ? 'State applied' : 'Failed to apply state'
+      };
+      peerService.send({ type: 'syncAck', payload: ackPayload });
+    }
+  }, [applyRemoteState, buildSyncSnapshot]);
+
+  const handleSyncRequest = useCallback((payload: OnlineSyncSnapshotPayload) => {
+    if (!isHostRef.current) {
+      console.warn('Received sync request but not host; ignoring.');
+      return;
+    }
+    toast('Peer requested board sync', { icon: '🔄', duration: 2000 });
+    sendStateSnapshot(payload.reason ?? 'sync request');
+  }, [sendStateSnapshot]);
+
+  const handleSyncAck = useCallback((payload: OnlineSyncAckPayload) => {
+    if (syncTimeoutRef.current) {
+      window.clearTimeout(syncTimeoutRef.current);
+      syncTimeoutRef.current = undefined;
+    }
+    if (payload.success) {
+      toast.success('Opponent synchronized', { icon: '✅', duration: 2500 });
+    } else {
+      toast.error(`Opponent failed to sync: ${payload.message ?? 'Unknown error'}`, { icon: '❌', duration: 3000 });
+    }
+  }, []);
+
+  const handleRemoteMove = useCallback((payload: OnlineMovePayload) => {
+    const game = chessRef.current;
+    try {
+      const moveResult = game.move({ from: payload.from, to: payload.to, promotion: payload.promotion });
+      if (!moveResult) {
+        throw new Error('Move could not be applied');
+      }
+
+      setLastMove({ from: moveResult.from, to: moveResult.to });
+      updateGameState(moveResult, true);
+
+      const localFen = game.fen();
+      const localHash = hashFEN(localFen);
+      const localHistory = game.history().length;
+
+      const fenMismatch = payload.fen && payload.fen !== localFen;
+      const hashMismatch = payload.fenHash && payload.fenHash !== localHash;
+      const historyMismatch = payload.historyLength !== undefined && payload.historyLength !== localHistory;
+
+      if (fenMismatch || hashMismatch || historyMismatch) {
+        const reason = fenMismatch ? 'FEN mismatch' : historyMismatch ? 'History mismatch' : 'Hash mismatch';
+        handleSyncDiscrepancy(reason);
+      } else {
+        toast.success('Opponent moved!');
+      }
+    } catch (error) {
+      console.error('Invalid remote move', error);
+      handleSyncDiscrepancy('Invalid move');
+    }
+  }, [handleSyncDiscrepancy, updateGameState]);
 
   const handleVoiceCommand = useCallback((transcript: string) => {
       if (isAiThinking || chessRef.current.isGameOver() || replayIndex !== -1) return;
@@ -376,11 +588,16 @@ const App: React.FC = () => {
     
     setTimeout(() => {
         chessRef.current = new Chess();
+        whiteTimeRef.current = INITIAL_TIME;
+        blackTimeRef.current = INITIAL_TIME;
         setWhiteTime(INITIAL_TIME); setBlackTime(INITIAL_TIME);
         setLastMove(null); setSelectedSquare(null); setValidDestinations([]);
         setCommentary(""); setEmotes([]); 
         setReplayIndex(-1);
         updateGameState();
+        if (gameMode === 'online' && isHostRef.current) {
+            sendStateSnapshot('initial');
+        }
         setView('game');
     }, 1500);
   };
@@ -392,6 +609,34 @@ const App: React.FC = () => {
       startGame();
   };
   
+  // --- ONLINE MESSAGE HANDLER ---
+  useEffect(() => {
+    const handleMessage = (msg: OnlineMessage) => {
+      if (msg.type === 'move') {
+        handleRemoteMove(msg.payload);
+      } else if (msg.type === 'config') {
+        const { variant, wTheme, bTheme } = msg.payload;
+        setGameVariant(variant);
+        setWhiteTheme(wTheme);
+        setBlackTheme(bTheme);
+        startGame(false);
+      } else if (msg.type === 'state') {
+        handleStateMessage(msg.payload);
+      } else if (msg.type === 'syncRequest') {
+        handleSyncRequest(msg.payload);
+      } else if (msg.type === 'syncAck') {
+        handleSyncAck(msg.payload);
+      } else if (msg.type === 'emote') {
+        handleEmote(msg.payload.emoji, msg.payload.square, true);
+      } else if (msg.type === 'restart') {
+        resetGame(true);
+        toast("Host restarted the game.");
+      }
+    };
+
+    peerService.onData(handleMessage);
+  }, [handleEmote, handleRemoteMove, handleStateMessage, handleSyncAck, handleSyncRequest, resetGame, startGame]);
+
   const exitToLanding = () => { 
       setView('landing'); 
       if(timerIntervalRef.current) clearInterval(timerIntervalRef.current); 
@@ -593,6 +838,7 @@ const App: React.FC = () => {
                     onBuyItem={handleBuyItem}
                     onOpenTower={() => setView('tower')}
                     isHost={isHost}
+                    onResyncBoard={gameMode === 'online' ? handleManualResync : undefined}
                 />
             </div>
         </PageTransition>
