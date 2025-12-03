@@ -37,6 +37,8 @@ const PageTransition = ({ children, className = "" }: { children?: React.ReactNo
 
 const App: React.FC = () => {
   const chessRef = useRef(new Chess());
+  const aiRequestInFlightRef = useRef(false);
+  const aiAbortControllerRef = useRef<AbortController | null>(null);
   
   const [view, setView] = useState<AppView>('hero');
   const [gameMode, setGameMode] = useState<GameMode>('ai');
@@ -120,8 +122,17 @@ const App: React.FC = () => {
       return tempGame.board();
   }, [replayIndex, board]);
 
+  useEffect(() => {
+    if (gameMode !== 'ai' && aiAbortControllerRef.current) {
+        aiAbortControllerRef.current.abort();
+        aiAbortControllerRef.current = null;
+        aiRequestInFlightRef.current = false;
+        setIsAiThinking(false);
+    }
+  }, [gameMode]);
+
   const handleEmote = (emoji: string, originSquare?: string, remote = false) => {
-      const playerColor = boardOrientation === 'white' ? 'w' : 'b'; 
+      const playerColor = boardOrientation === 'white' ? 'w' : 'b';
       
       let kingSquare = originSquare;
       if (!kingSquare) {
@@ -386,6 +397,13 @@ const App: React.FC = () => {
   };
   
   const resetGame = (remote = false) => {
+      if (aiAbortControllerRef.current) {
+        aiAbortControllerRef.current.abort();
+        aiAbortControllerRef.current = null;
+      }
+      aiRequestInFlightRef.current = false;
+      setIsAiThinking(false);
+      
       if (gameMode === 'online' && !remote) {
           peerService.send({ type: 'restart', payload: {} });
       }
@@ -393,6 +411,13 @@ const App: React.FC = () => {
   };
   
   const exitToLanding = () => { 
+      if (aiAbortControllerRef.current) {
+        aiAbortControllerRef.current.abort();
+        aiAbortControllerRef.current = null;
+      }
+      aiRequestInFlightRef.current = false;
+      setIsAiThinking(false);
+      
       setView('landing'); 
       if(timerIntervalRef.current) clearInterval(timerIntervalRef.current); 
   };
@@ -400,16 +425,57 @@ const App: React.FC = () => {
   const makeAIMove = useCallback(async () => {
     const game = chessRef.current;
     if (game.isGameOver() || game.turn() === 'w') return;
+    
+    // Guard against concurrent AI requests
+    if (aiRequestInFlightRef.current) {
+      console.log("AI request already in flight, skipping");
+      return;
+    }
+    
+    aiRequestInFlightRef.current = true;
     setIsAiThinking(true);
+    
+    // Create AbortController for this request
+    const abortController = new AbortController();
+    aiAbortControllerRef.current = abortController;
+    
     try {
-        const aiResult = await getAIMove(game.fen(), game.moves(), difficulty, game.history());
-        const move = game.move(aiResult.move);
+        const aiResult = await getAIMove(game.fen(), game.moves(), difficulty, game.history(), {
+          signal: abortController.signal
+        });
+        
+        // Check if the request was aborted
+        if (aiResult.aborted) {
+          console.log("AI request was cancelled");
+          return;
+        }
+        
+        // Show toast if fallback was used
+        if (aiResult.usedFallback) {
+          const reason = aiResult.timedOut 
+            ? `Timeout (${aiResult.durationMs}ms)`
+            : aiResult.fallbackReason || 'AI fallback';
+          toast(`${aiResult.data.commentary} — ${reason}`, { 
+            icon: '⚡', 
+            duration: 4000,
+            style: { background: '#f59e0b', color: '#000' }
+          });
+        }
+        
+        const move = game.move(aiResult.data.move);
         if (move) {
             setLastMove({ from: move.from, to: move.to });
-            setCommentary(aiResult.commentary);
+            setCommentary(aiResult.data.commentary);
             updateGameState(move);
         }
-    } catch (e) { console.error(e); } finally { setIsAiThinking(false); }
+    } catch (e) { 
+      console.error(e);
+      toast.error("AI move failed!");
+    } finally { 
+      aiRequestInFlightRef.current = false;
+      aiAbortControllerRef.current = null;
+      setIsAiThinking(false);
+    }
   }, [difficulty, updateGameState]);
 
   useEffect(() => {
@@ -466,7 +532,14 @@ const App: React.FC = () => {
   };
 
   const undoMove = () => {
-    if (isAiThinking || replayIndex !== -1 || gameMode === 'online') return; 
+    if (replayIndex !== -1 || gameMode === 'online') return; 
+    if (aiAbortControllerRef.current) {
+      aiAbortControllerRef.current.abort();
+      aiAbortControllerRef.current = null;
+    }
+    aiRequestInFlightRef.current = false;
+    setIsAiThinking(false);
+
     const game = chessRef.current;
     if(game.history().length === 0) return;
     game.undo();
