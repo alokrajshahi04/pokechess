@@ -1,3 +1,4 @@
+import type { Chess, Square } from 'chess.js';
 
 export interface PokemonPiece {
   id: number;
@@ -16,7 +17,7 @@ export interface MoveData {
   san: string; // Standard Algebraic Notation
 }
 
-export interface GameState {
+export interface ChessGameState {
   fen: string;
   turn: PieceColor;
   isGameOver: boolean;
@@ -146,4 +147,80 @@ export interface PuzzleState {
     score: number;
     timeLeft: number;
     isActive: boolean;
+}
+
+export type BoardState = ({ type: PieceType; color: PieceColor } | null)[][];
+
+export interface LastMove {
+    from: string;
+    to: string;
+}
+
+export interface PromotionMove {
+    from: string;
+    to: string;
+}
+
+export interface P2PScore {
+    white: number;
+    black: number;
+}
+
+export type GameStatus = 'idle' | 'loading' | 'active' | 'ended';
+
+export interface GameContextState {
+    board: BoardState;
+    turn: PieceColor;
+    lastMove: LastMove | null;
+    selectedSquare: Square | null;
+    validDestinations: string[];
+    promotionMove: PromotionMove | null;
+    boardEffect: BoardEffect | null;
+    boardOrientation: BoardOrientation;
+    whiteTime: number;
+    blackTime: number;
+    capturedWhite: PieceType[];
+    capturedBlack: PieceType[];
+    commentary: string;
+    difficulty: GameDifficulty;
+    isAiThinking: boolean;
+    emotes: Emote[];
+    p2pScore: P2PScore;
+    replayIndex: number;
+    gameMode: GameMode;
+    isHost: boolean;
+    gameVariant: GameVariant;
+    whiteTheme: TeamTheme;
+    blackTheme: TeamTheme;
+    status: GameStatus;
+}
+
+export interface StartGameOptions {
+    playSound?: boolean;
+    orientation?: BoardOrientation;
+    resetScores?: boolean;
+}
+
+export interface GameContextValue {
+    chess: Chess;
+    state: GameContextState;
+    displayedBoard: BoardState;
+    startGame: (options?: StartGameOptions) => Promise<void>;
+    resetGame: (remote?: boolean) => void;
+    exitGame: () => void;
+    handleSquareClick: (square: Square) => void;
+    handlePromotionSelect: (type: PieceType) => void;
+    clearPromotion: () => void;
+    undoMove: () => void;
+    handleEmote: (emoji: string, originSquare?: string, remote?: boolean) => void;
+    handleVoiceCommand: (transcript: string) => void;
+    setDifficulty: (difficulty: GameDifficulty) => void;
+    setGameMode: (mode: GameMode) => void;
+    setHostStatus: (isHost: boolean) => void;
+    setBoardOrientation: (orientation: BoardOrientation) => void;
+    flipBoard: () => void;
+    setThemes: (whiteTheme: TeamTheme, blackTheme: TeamTheme) => void;
+    setGameVariant: (variant: GameVariant) => void;
+    setReplayIndex: (index: number) => void;
+    updateCommentary: (commentary: string) => void;
 }
