@@ -118,8 +118,24 @@ const GameInfo: React.FC<GameInfoProps> = ({
       setChatHistory(prev => [...prev, { role: 'user', text: chatInput }]);
       const msg = chatInput;
       setChatInput("");
-      const res = await getAIChatResponse(msg, chatHistory as any);
-      setChatHistory(prev => [...prev, { role: 'model', text: res }]);
+      
+      try {
+          const result = await getAIChatResponse(msg, chatHistory as any);
+          
+          if (result.usedFallback) {
+              const systemMsg = result.timedOut 
+                  ? `[System: Chat timed out after ${result.durationMs}ms]`
+                  : `[System: ${result.fallbackReason || 'Chat failed'}]`;
+              setChatHistory(prev => [...prev, { role: 'model', text: systemMsg }]);
+              toast.error("Chat unavailable - using fallback", { duration: 2000 });
+          }
+          
+          setChatHistory(prev => [...prev, { role: 'model', text: result.data }]);
+      } catch (e) {
+          console.error("Chat error:", e);
+          setChatHistory(prev => [...prev, { role: 'model', text: '[System: Chat service unavailable]' }]);
+          toast.error("Chat service unavailable", { duration: 2000 });
+      }
   };
 
   const handleDestructiveAction = (action: 'reset' | 'exit') => {
