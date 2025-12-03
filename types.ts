@@ -101,10 +101,58 @@ export interface TrainerStats {
     rating: number; // Elo-like rating
 }
 
-export interface OnlineMessage {
-    type: 'move' | 'chat' | 'emote' | 'config' | 'restart';
-    payload: any;
+export interface OnlineScore {
+    white: number;
+    black: number;
 }
+
+export interface OnlineMovePayload {
+    from: string;
+    to: string;
+    promotion?: string;
+    fen: string;
+    fenHash: string;
+    historyLength: number;
+}
+
+export interface OnlineSyncSnapshotPayload {
+    fen: string;
+    fenHash: string;
+    historyLength: number;
+    whiteTime: number;
+    blackTime: number;
+    variant: GameVariant;
+    whiteTheme: TeamTheme;
+    blackTheme: TeamTheme;
+    score: OnlineScore;
+    reason?: string;
+}
+
+export interface OnlineSyncAckPayload extends OnlineSyncSnapshotPayload {
+    success: boolean;
+    message?: string;
+}
+
+export interface OnlineConfigPayload {
+    variant: GameVariant;
+    wTheme: TeamTheme;
+    bTheme: TeamTheme;
+}
+
+export interface OnlineEmotePayload {
+    emoji: string;
+    square?: string;
+}
+
+export type OnlineMessage =
+    | { type: 'move'; payload: OnlineMovePayload }
+    | { type: 'chat'; payload: any }
+    | { type: 'emote'; payload: OnlineEmotePayload }
+    | { type: 'config'; payload: OnlineConfigPayload }
+    | { type: 'restart'; payload: {} }
+    | { type: 'state'; payload: OnlineSyncSnapshotPayload }
+    | { type: 'syncRequest'; payload: OnlineSyncSnapshotPayload }
+    | { type: 'syncAck'; payload: OnlineSyncAckPayload };
 
 // --- NEW TYPES ---
 
