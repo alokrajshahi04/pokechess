@@ -6,7 +6,7 @@ import { TEAM_PRESETS, LEAGUES } from '../constants';
 import PokemonPiece from './PokemonPiece';
 import ShopList from './ShopList';
 import ProfileView from './ProfileView';
-import { Send, Mic, Play, SkipBack, SkipForward, Rewind, LogOut, RotateCcw, Repeat, CheckCircle2, RotateCw, BrainCircuit } from 'lucide-react';
+import { Send, Mic, Play, SkipBack, SkipForward, Rewind, LogOut, RotateCcw, Repeat, CheckCircle2, RotateCw, BrainCircuit, Volume2, VolumeX } from 'lucide-react';
 import { getAIChatResponse } from '../services/geminiService';
 import { toast } from 'react-hot-toast';
 
@@ -23,6 +23,7 @@ interface GameInfoProps {
   undoMove: () => void;
   onFlipBoard: () => void;
   onExit: () => void;
+  onRematch: () => void;
   isAiThinking: boolean;
   whiteTime: number;
   blackTime: number;
@@ -42,6 +43,8 @@ interface GameInfoProps {
   onBuyItem: (item: ShopItem) => void;
   onOpenTower: () => void;
   isHost?: boolean;
+  soundMuted?: boolean;
+  onToggleSound?: () => void;
 }
 
 const formatTime = (seconds: number) => {
@@ -52,10 +55,11 @@ const formatTime = (seconds: number) => {
 
 const GameInfo: React.FC<GameInfoProps> = ({ 
   game, capturedWhite, capturedBlack, commentary, difficulty, gameMode,
-  orientation, setDifficulty, resetGame, undoMove, onFlipBoard, onExit,
+  orientation, setDifficulty, resetGame, undoMove, onFlipBoard, onExit, onRematch,
   isAiThinking, whiteTime, blackTime, whiteTheme, blackTheme, xpState, 
   missions, trainerStats, isGameOver, onEmote, onVoiceCommand,
-  replayIndex, setReplayIndex, p2pScore, coins, inventory, onBuyItem, onOpenTower, isHost = true
+  replayIndex, setReplayIndex, p2pScore, coins, inventory, onBuyItem, onOpenTower, isHost = true,
+  soundMuted = false, onToggleSound
 }) => {
   const [activeTab, setActiveTab] = useState<'moves' | 'chat' | 'shop' | 'profile'>('moves');
   const [chatHistory, setChatHistory] = useState<{role: string, text: string}[]>([]);
@@ -372,6 +376,13 @@ const GameInfo: React.FC<GameInfoProps> = ({
                     >
                         <Mic size={16} />
                     </button>
+                    <button 
+                        onClick={onToggleSound}
+                        className={`p-2 rounded-full transition-all shadow-sm btn-press ${soundMuted ? 'bg-slate-700/80 text-slate-400 border border-slate-600' : 'bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 border border-slate-600'}`}
+                        title={soundMuted ? 'Unmute' : 'Mute'}
+                    >
+                        {soundMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+                    </button>
                     <div className={`text-xl font-mono font-bold ${bottomTime < 30 ? 'text-red-500 animate-pulse text-glow' : 'text-white'} bg-slate-800 px-3 py-1 rounded-lg border border-slate-600 min-w-[70px] text-center`}>
                         {formatTime(bottomTime)}
                     </div>
@@ -401,13 +412,16 @@ const GameInfo: React.FC<GameInfoProps> = ({
                     <Repeat size={14} />
                 </button>
                 
-                {/* Reset */}
+                {/* Reset / Rematch */}
                 <button 
-                    onClick={() => handleDestructiveAction('reset')} 
+                    onClick={isGameOver ? onRematch : () => handleDestructiveAction('reset')} 
                     className={`flex flex-col items-center justify-center py-2 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all shadow-sm btn-press h-10 border
-                        ${confirmAction === 'reset' ? 'bg-yellow-600 text-white border-yellow-500 shadow-neon-yellow' : 'bg-slate-800 text-yellow-500 border-yellow-500/20 hover:bg-slate-700 hover:border-yellow-500/50'}`}
+                        ${isGameOver 
+                            ? 'bg-blue-600/90 text-white border-blue-500 shadow-neon-blue' 
+                            : confirmAction === 'reset' ? 'bg-yellow-600 text-white border-yellow-500 shadow-neon-yellow' : 'bg-slate-800 text-yellow-500 border-yellow-500/20 hover:bg-slate-700 hover:border-yellow-500/50'}`}
                 >
-                    {confirmAction === 'reset' ? <CheckCircle2 size={14} /> : <RotateCw size={14} />}
+                    {isGameOver ? <RotateCw size={14} /> : confirmAction === 'reset' ? <CheckCircle2 size={14} /> : <RotateCw size={14} />}
+                    {isGameOver ? <span className="mt-0.5">Rematch</span> : null}
                 </button>
 
                 {/* Exit */}

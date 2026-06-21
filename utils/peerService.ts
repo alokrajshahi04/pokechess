@@ -3,6 +3,14 @@ import { OnlineMessage } from '../types';
 
 export type PeerStatus = 'idle' | 'waiting' | 'connecting' | 'open' | 'reconnecting' | 'closed';
 
+const ICE_SERVERS = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun2.l.google.com:19302' },
+  { urls: 'stun:stun3.l.google.com:19302' },
+  { urls: 'stun:stun4.l.google.com:19302' },
+];
+
 class PeerService {
   private peer: Peer | null = null;
   private conn: DataConnection | null = null;
@@ -15,6 +23,8 @@ class PeerService {
   private statusListeners = new Set<(status: PeerStatus) => void>();
   private autoReconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private autoReconnectAttempted = false;
+  private reconnectAttempts = 0;
+  private maxReconnectAttempts = 3;
 
   constructor() {
     this.ensurePeer();
@@ -66,9 +76,17 @@ class PeerService {
 
     this.targetPeerId = peerId;
     this.autoReconnectAttempted = false;
+    this.reconnectAttempts = 0;
     this.updateStatus('connecting');
 
-    const connection = peer.connect(peerId, { reliable: true });
+    const connection = peer.connect(peerId, {
+      reliable: true,
+      config: {
+        iceServers: ICE_SERVERS,
+        iceTransportPolicy: 'all',
+        iceCandidatePoolSize: 10,
+      },
+    } as any);
     this.attachConnection(connection);
   }
 
@@ -77,6 +95,11 @@ class PeerService {
 
     this.clearAutoReconnectTimer();
     this.autoReconnectAttempted = false;
+
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      this.updateStatus('closed');
+      return;
+    }
 
     if (!this.targetPeerId) {
       if (peer.disconnected) {
@@ -94,10 +117,18 @@ class PeerService {
       peer.reconnect();
     }
 
+    this.reconnectAttempts++;
     this.updateStatus('reconnecting');
     this.cleanupConnection(true);
 
-    const connection = peer.connect(this.targetPeerId, { reliable: true });
+    const connection = peer.connect(this.targetPeerId, {
+      reliable: true,
+      config: {
+        iceServers: ICE_SERVERS,
+        iceTransportPolicy: 'all',
+        iceCandidatePoolSize: 10,
+      },
+    } as any);
     this.attachConnection(connection);
   }
 
@@ -157,7 +188,14 @@ class PeerService {
       return this.peer;
     }
 
-    const peer = new Peer({ debug: 2 } as any);
+    const peer = new Peer({
+      debug: 2,
+      config: {
+        iceServers: ICE_SERVERS,
+        iceTransportPolicy: 'all',
+        iceCandidatePoolSize: 10,
+      },
+    } as any);
     this.peer = peer;
 
     peer.on('open', this.handlePeerOpen);
@@ -227,6 +265,7 @@ class PeerService {
     if (this.conn !== conn) return;
     this.clearAutoReconnectTimer();
     this.autoReconnectAttempted = false;
+    this.reconnectAttempts = 0;
     this.updateStatus('open');
     this.flushPendingMessages();
     this.connectListeners.forEach(listener => listener());
@@ -300,7 +339,8 @@ class PeerService {
   }
 
   private scheduleAutoReconnect() {
-    if (this.autoReconnectAttempted || !this.targetPeerId) return;
+    if (this.reconnectAttempts >= this.maxReconnectAttempts || !this.targetPeerId) return;
+    if (this.autoReconnectAttempted) return;
 
     this.autoReconnectAttempted = true;
     this.clearAutoReconnectTimer();

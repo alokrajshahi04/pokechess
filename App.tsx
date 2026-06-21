@@ -22,7 +22,8 @@ import confetti from 'canvas-confetti';
 import { 
     playMoveSound, playCheckSound, playWinSound, playStartSound, 
     playThunderSound, playFireSound, playPsychicSound, playSlamSound, playTeleportSound, playGhostSound,
-    playCritSound, playLevelUpSound, playEmoteSound
+    playCritSound, playLevelUpSound, playEmoteSound,
+    toggleMute
 } from './utils/sound';
 import { BookOpen } from 'lucide-react';
 
@@ -80,6 +81,7 @@ const App: React.FC = () => {
       gamesPlayed: 0, wins: 0, losses: 0, draws: 0, highestStreak: 0, currentStreak: 0, rating: 1000 
   });
   const [replayIndex, setReplayIndex] = useState(-1);
+  const [soundMuted, setSoundMuted] = useState(false);
 
   const [peerStatus, setPeerStatus] = useState<PeerStatus>(() => peerService.getStatus());
   const previousPeerStatusRef = useRef<PeerStatus>(peerService.getStatus());
@@ -561,6 +563,19 @@ const App: React.FC = () => {
     playMoveSound(); updateGameState();
   };
 
+  const handleToggleSound = () => {
+      const next = toggleMute();
+      setSoundMuted(next);
+      toast(next ? 'Sound muted' : 'Sound on', { icon: next ? '🔇' : '🔊', duration: 1200 });
+  };
+
+  const handleRematch = () => {
+      if (gameMode === 'online' && peerStatus === 'open') {
+          peerService.send({ type: 'restart', payload: {} });
+      }
+      resetGame();
+  };
+
   const handleBuyItem = (item: ShopItem) => {
       if (coins >= item.cost) {
           setCoins(c => c - item.cost);
@@ -684,7 +699,7 @@ const App: React.FC = () => {
                     game={chessRef.current} capturedWhite={capturedWhite} capturedBlack={capturedBlack}
                     commentary={commentary} difficulty={difficulty} gameMode={gameMode} orientation={boardOrientation}
                     setDifficulty={setDifficulty} resetGame={() => resetGame()} undoMove={undoMove} onFlipBoard={() => setBoardOrientation(p => p === 'white' ? 'black' : 'white')}
-                    onExit={exitToLanding} isAiThinking={isAiThinking} whiteTime={whiteTime} blackTime={blackTime}
+                    onExit={exitToLanding} onRematch={handleRematch} isAiThinking={isAiThinking} whiteTime={whiteTime} blackTime={blackTime}
                     whiteTheme={whiteTheme} blackTheme={blackTheme} xpState={xpState} 
                     missions={missions} trainerStats={trainerStats} isGameOver={chessRef.current.isGameOver()}
                     onEmote={(e) => handleEmote(e, undefined)} onVoiceCommand={handleVoiceCommand}
@@ -695,6 +710,8 @@ const App: React.FC = () => {
                     onBuyItem={handleBuyItem}
                     onOpenTower={() => setView('tower')}
                     isHost={isHost}
+                    soundMuted={soundMuted}
+                    onToggleSound={handleToggleSound}
                 />
             </div>
         </PageTransition>

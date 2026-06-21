@@ -2,6 +2,11 @@
 // Simple synth for retro sounds using Web Audio API
 
 let audioCtx: AudioContext | null = null;
+let isMuted = false;
+
+export const getMuteState = () => isMuted;
+export const setMute = (muted: boolean) => { isMuted = muted; };
+export const toggleMute = () => { isMuted = !isMuted; return isMuted; };
 
 const getAudioCtx = () => {
   if (!audioCtx) {
@@ -11,6 +16,7 @@ const getAudioCtx = () => {
 };
 
 const playTone = (freq: number, type: OscillatorType, duration: number, delay = 0, vol = 0.1) => {
+  if (isMuted) return;
   const ctx = getAudioCtx();
   if (ctx.state === 'suspended') ctx.resume();
   
@@ -59,6 +65,7 @@ export const playStartSound = () => {
 // --- Combat Sounds ---
 
 export const playThunderSound = () => {
+  if (isMuted) return;
   const ctx = getAudioCtx();
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
@@ -100,6 +107,7 @@ export const playThunderSound = () => {
 };
 
 export const playFireSound = () => {
+  if (isMuted) return;
   const ctx = getAudioCtx();
   const bufferSize = ctx.sampleRate * 0.8;
   const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
